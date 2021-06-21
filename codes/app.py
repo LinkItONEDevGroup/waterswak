@@ -2,6 +2,7 @@
 # @brief The main module to maintain whole app
 # @author wuulong@gmail.com
 #standard
+import os
 import logging
 from datetime import datetime,timedelta
 
@@ -18,6 +19,9 @@ from codes.const import *
 #How/NeedToKnow:
 class SApp:
     def __init__(self):
+        dir_path="output"
+        if not os.path.isdir(dir_path):
+            os.mkdir(dir_path)
         self.init_log()
         logging.info("LASS - %s version: v%s" %(TITLE,VERSION))
         self.conn = None
