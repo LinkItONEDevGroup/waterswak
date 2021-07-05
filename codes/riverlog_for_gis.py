@@ -22,7 +22,7 @@ def url_get(filename,url,reload=False):
         
 
       
-def load_json(filename,file_id):
+def load_json_local(filename,file_id):
     """
         load json file and transfer to panda
         hardcode: handle json with data in 'data'  
@@ -111,7 +111,7 @@ def api_to_csv(api_id,pars,reload=False):
     while cont:
         filename = filename_prefix + ".json"
         url_get(filename,url,reload)
-        df = load_json(filename,api_id)
+        df = load_json_local(filename,api_id)
         if df is None:
             print("%s don't have data" %(api_id))
             return None

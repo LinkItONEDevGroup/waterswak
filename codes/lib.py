@@ -168,3 +168,100 @@ def keypar_to_view(conn,key,pars,tran_id):
 
     df = sql_to_df(conn,sql)
     return df
+
+def walk_dir(search_dir,ext=".shp",white_list=None):
+    """
+    預設是找到目錄內有的 .shp 檔案的 pathname 回傳
+    如果有提供 white_list, 則只會找到那些檔案。用在新增幾個檔案要匯入的情況
+    """
+    pathnames = []
+    for dirpath, dirnames, filenames in os.walk(search_dir):
+        #print("dirpath=%s\ndirnames=%s\nfilenames=%s" %(dirpath, dirnames, filenames))
+        for filename in [f for f in filenames if f.endswith(ext)]:
+            if not white_list is None:
+                if filename in white_list:
+                    pathnames.append(os.path.join(dirpath, filename))
+                pass
+            else:
+                pathnames.append(os.path.join(dirpath, filename))
+    return pathnames
+
+
+def shp_tosql(lines,table_name, sql_path="data/shp.sql", srid=3826, encoding="UTF-8"):
+    """將 shp 檔名s 產生出所需灌入資料庫的 script, 將輸出到命令列執行
+    即可順利的將資料灌入資料庫
+    """
+    #lines=file_to_lines("shp.txt")
+    if os.path.exists(sql_path):
+        #os.remove(sql_path)
+        print("rm %s" %(sql_path))
+
+    for line in lines:
+        #print(line,end = '')
+        basename = os.path.basename(line)
+        base = os. path. splitext(basename)[0]
+
+        out1 = "shp2pgsql -W %s -D -s %i -I \"%s\" \"%s\">> %s" %(encoding,srid,line,table_name,sql_path)
+
+        print("%s" %(out1))
+    out2 = "psql -p 5431 -U postgres -d postgis -f %s" %(sql_path)
+    print("%s" %(out2))
+
+def list_remove(lines,black_strs):
+    """ list 中如果有 black_strs 的字串，就會被移除，例如用在找到的檔案中，某些不需要
+    """
+    ret = []
+    for line in lines:
+        for black_str in black_strs:
+            if line.find(black_str)>=0:
+                pass
+            else:
+                ret.append(line)
+    return ret
+
+def url_get(filename,url,reload=False):
+    if not os.path.isfile(filename) or reload:
+        print("Getting %s to %s" %(url,filename))
+        t1 = datetime.now()
+        r = requests.get(url, params = {})
+        open(filename, 'wb').write(r.content)
+        t2 = datetime.now()
+        #print("[%s]-%s" %(t2-t1,filename))
+
+def load_json(filename):
+    data = None
+    try:
+        data_date = ""
+        with open(filename , 'r', encoding='UTF-8') as json_file:
+            data = json.load(json_file)
+            return data
+    except:
+        print("%s:%s" %(filename,"EXCEPTION!"))
+        return None
+def xml_to_df(filename):
+    import pandas as pd
+    import xml.etree.ElementTree as ET
+
+    tree = ET.parse(filename)
+    root = tree.getroot()
+
+    dfcols=[]
+    sers = []
+    for Data in root:
+        rec_list=[]
+        dfcols1=[]
+        for record in Data:
+            #print(record.tag,record.text)
+            if not record.tag in dfcols:
+                dfcols.append(record.tag)
+            dfcols1.append(record.tag)
+            rec_list.append(record.text)
+
+        #print("rec_list=%s" %(rec_list))
+        ser = pd.Series(rec_list, index=dfcols1)
+        sers.append(ser)
+
+    df = pd.DataFrame(columns=dfcols)
+    for ser in sers:
+        df = df.append(ser,ignore_index=True)
+    return df

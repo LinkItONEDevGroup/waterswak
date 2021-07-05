@@ -109,3 +109,28 @@ def sql_to_df(conn, sql):
     finally:
         if conn is not None:
             conn.close()
+
+def df_to_db(table_name,df,action_str='replace'):
+    """
+    action_str: df.to_sql if_exists parameter: replace, append, ..
+    """
+    import psycopg2
+    import pandas as pds
+    from sqlalchemy import create_engine
+
+    dataFrame = df
+    # Create an engine instance
+    alchemyEngine   = create_engine('postgresql+psycopg2://postgres:your_password@127.0.0.1:5431/postgis', pool_recycle=3600);
+    postgreSQLConnection    = alchemyEngine.connect();
+    postgreSQLTable         = table_name
+
+    try:
+        frame           = dataFrame.to_sql(postgreSQLTable, postgreSQLConnection, if_exists=action_str);
+    except ValueError as vx:
+        print(vx)
+    except Exception as ex:
+        print(ex)
+    else:
+        print("PostgreSQL Table %s has been created successfully."%postgreSQLTable);
+    finally:
+        postgreSQLConnection.close();
