@@ -4,6 +4,7 @@ import sys
 import pandas as pd
 from codes.db import *
 from codes.lib import *
+from codes.riverlog import *
 
 def job_daily_general(conn):
     filename="output/cwms_hsinchu.xml"
@@ -21,7 +22,7 @@ try:
     opts, args = getopt.getopt(sys.argv[1:], "h", [])
     for opt, arg in opts:
         if opt == '-h':
-            print ('period_job.py [ -h ] action_str [par1] [par2] ...')
+            print ('routine_job.py [ -h ] action_str [par1] [par2] ...')
             print("""ex:
     period_job.py daily-general""")
 
@@ -33,7 +34,7 @@ except getopt.GetoptError:
 
 
 if len(args)==0:
-    print ('usage: period_job.py [ -h ] action_str [par1] [par2] ...')
+    print ('usage: routine_job.py [ -h ] action_str [par1] [par2] ...')
     sys.exit(2)
 conn=connect_db()
 act_str=args[0]
@@ -41,3 +42,5 @@ pars=[]
 
 if act_str=="daily-general":
     job_daily_general(conn)
+
+

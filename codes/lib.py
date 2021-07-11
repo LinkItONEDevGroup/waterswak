@@ -3,7 +3,7 @@
 # @author wuulong@gmail.com
 import pandas as pd
 from codes.db import *
-from codes.riverlog_for_gis import *
+from codes.riverlog import *
 import pandasql as ps
 from pandas.api.types import is_numeric_dtype
 
@@ -200,8 +200,10 @@ def shp_tosql(lines,table_name, sql_path="data/shp.sql", srid=3826, encoding="UT
         #print(line,end = '')
         basename = os.path.basename(line)
         base = os. path. splitext(basename)[0]
-
-        out1 = "shp2pgsql -W %s -D -s %i -I \"%s\" \"%s\">> %s" %(encoding,srid,line,table_name,sql_path)
+        if table_name=="":
+            out1 = "shp2pgsql -W %s -D -s %i -I \"%s\" \"%s\">> %s" %(encoding,srid,line,base,sql_path)
+        else:
+            out1 = "shp2pgsql -W %s -D -s %i -I \"%s\" \"%s\">> %s" %(encoding,srid,line,table_name,sql_path)
 
         print("%s" %(out1))
     out2 = "psql -p 5431 -U postgres -d postgis -f %s" %(sql_path)

@@ -125,7 +125,7 @@ def df_to_db(table_name,df,action_str='replace'):
     postgreSQLTable         = table_name
 
     try:
-        frame           = dataFrame.to_sql(postgreSQLTable, postgreSQLConnection, if_exists=action_str);
+        frame           = dataFrame.to_sql(postgreSQLTable, postgreSQLConnection, if_exists=action_str,index=False);
     except ValueError as vx:
         print(vx)
     except Exception as ex:

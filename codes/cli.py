@@ -12,7 +12,7 @@ import codes.globalclasses as gc
 from codes.const import *
 from codes.db import *
 from codes.lib import *
-from codes.riverlog_for_gis import *
+from codes.riverlog import *
 
 ##### Code section #####
 #Spec: about, user commands, test commands

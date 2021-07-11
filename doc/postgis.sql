@@ -421,7 +421,16 @@ CREATE INDEX m_waterwork_quality_idx3 ON m_waterwork_quality ("項目");
 head -n 1000 data/台灣自來水公司供水轄區資訊.csv | /Volumes/F2020/opt/anaconda3/envs/py37/bin/csvsql -i postgresql --no-constraints --tables m_waterwork_area >> output/台灣自來水公司供水轄區資訊.sql
 \copy "m_waterwork_area" FROM 'data/台灣自來水公司供水轄區資訊.csv' WITH (FORMAT csv,HEADER);
 
-select * from m_waterwork_area;
+
+SELECT AddGeometryColumn('m_waterwork_area','geom','3826','POINT','2');
+UPDATE m_waterwork_area SET geom = ST_Point("X座標(TWD97)", "Y座標(TWD97)");
+CREATE INDEX m_waterwork_area_geom_idx ON public.m_waterwork_area USING gist (geom)
+
+
+select ST_Point("X座標(TWD97)", "Y座標(TWD97)") from m_waterwork_area
+
+select * from m_waterwork_area where "淨水場名稱" like '%第二%';
+select * from m_waterwork_area where "淨水場名稱"='第二淨水場' and "區處別"=3;
 區處別       | numeric           |           |          |
  淨水場名稱   | character varying |           |          |
  X座標(TWD97) | numeric           |           |          |
@@ -538,7 +547,70 @@ select max("SampleDate") from e_river_q;
 select distinct "River" from e_river_q where "Basin"='頭前溪流域';
 
 select * from e_river_q where "SiteName"='內灣吊橋' order by "SampleDate";
+select * from e_river_q where "SiteName"='中正大橋' and "ItemName"='氨氮' order by "SampleDate";
 
+CAST ( "SampleDate" AS date )
+
+select "SampleDate","ItemValue",extract(epoch from CAST ( "SampleDate" AS date )) as time from e_river_q where "SiteName"='中正大橋' and "ItemName"='氨氮' order by "SampleDate";
+
+select "SampleDate","ItemValue",extract(epoch from CAST ( "SampleDate" AS date )) as time from e_river_q where "SiteName"='中正大橋' and "ItemName"='氨氮' and isnumeric("ItemValue") order by "SampleDate";
+
+
+WITH upd AS (
+    select "SampleDate","ItemValue",extract(epoch from CAST ( "SampleDate" AS date )) as time from e_river_q where "SiteName"='中正大橋' and "ItemName"='氨氮' and isnumeric("ItemValue") order by "SampleDate"
+)
+INSERT INTO t_time_series SELECT time,'river_q_中正大橋_氨氮',CAST ("ItemValue" as float) FROM upd;
+
+select "SampleDate","ItemValue",extract(epoch from CAST ( "SampleDate" AS date )) as time from e_river_q where "SiteName"='中正大橋' and "ItemName"='氨氮' and not isnumeric("ItemValue") order by "SampleDate";
+
+WITH upd AS (
+    select "SampleDate","ItemValue",extract(epoch from CAST ( "SampleDate" AS date )) as time from e_river_q where "SiteName"='中正大橋' and "ItemName"='氨氮' and not isnumeric("ItemValue") order by "SampleDate"
+)
+INSERT INTO t_time_series SELECT time,'river_q_中正大橋_氨氮',0 FROM upd;
+
+select * from t_time_series where id='river_q_中正大橋_氨氮' order by dt;
+
+
+CREATE FUNCTION dup(in int, out f1 int, out f2 text)
+    AS $$ SELECT $1, CAST($1 AS text) || ' is text' $$
+    LANGUAGE SQL;
+
+SELECT * FROM dup(42);
+
+CREATE or replace FUNCTION iIF(
+    condition boolean,       -- IF condition
+    true_result anyelement,  -- THEN
+    false_result anyelement  -- ELSE
+) RETURNS anyelement AS $f$
+  SELECT CASE WHEN condition THEN true_result ELSE false_result END
+$f$  LANGUAGE SQL IMMUTABLE;
+
+
+with r as (
+select "SampleDate","ItemValue",extract(epoch from CAST ( "SampleDate" AS date )) as time,
+    cast(iif(cast(isnumeric("ItemValue") as boolean ),"ItemValue",'0') as float) as value
+ from e_river_q where "SiteName"='中正大橋' and "ItemName"='氨氮'  order by "SampleDate"
+ )
+ select time,value from r where time<1614729600 and time>1538524800
+
+select "SampleDate","ItemValue",extract(epoch from CAST ( "SampleDate" AS date )) as time,
+    cast(iif(cast(isnumeric("ItemValue") as boolean ),"ItemValue",'0') as float) as value
+ from e_river_q where "SiteName"=${query0} and "ItemName"='氨氮'  order by "SampleDate"
+
+內灣吊橋,寶山水庫取水口
+
+select distinct "ItemName" from e_river_q
+select distinct "SiteName" from e_river_q where "Basin"='淡水河流域'
+select "SiteName","ItemValue","SampleDate" from e_river_q where "Basin"='淡水河流域' and "ItemName"='河川污染分類指標' order by "SampleDate"
+
+select "SiteName","ItemValue","SampleDate" from e_river_q where "Basin"='淡水河流域' and "ItemName"='河川污染分類指標' order by "ItemValue" desc;
+
+select distinct "SiteName" from e_river_q where "Basin"='淡水河流域' and "ItemName"='河川污染分類指標' and "ItemValue">'5';
+
+
+ 
+
+$__unixEpochFilter(time)
 
 --EPA //dws_p_28 每月自來水水質監測資料 -> e_waterwork_q
 select count(*) from e_waterwork_q;
@@ -769,3 +841,178 @@ select distinct "County","Year","Month","Garbage_Recycled" from e_trash_recycle 
 
 select * from e_garbage_disposal limit 10;
 select * from e_garbage_disposal where "Category"='新竹市' order by "Year"
+
+-- 更新 table 的 geom srid
+SELECT UpdateGeometrySRID('riverpoly_rivercode','geom',3826);
+select * from geometry_columns where f_table_name='riverpoly_1300';
+
+# view 沒有辦法更新 srid
+select * from geometry_columns where f_table_name='sensor_station';
+
+
+select river_name, ST_Transform(ST_SetSRID(geom,3826), 4326) from riverpoly_rivercode where river_name='頭前溪';
+
+select river_name, ST_Transform(geom, 4326) from riverpoly_rivercode where river_name='頭前溪';
+
+SELECT AddGeometryColumn('county_moi','bbox','3824','GEOMETRY','2');
+text AddGeometryColumn(varchar table_name, varchar column_name, integer srid, varchar type, integer dimension, boolean use_typmod=true);
+
+ppobsta_wra_e
+RIVERL
+RIVWLSTA_e
+RIVQASTA_e
+RIVSESTA
+hyctide
+hycw
+hycbuoy
+gwobwell_e
+LASUBSTA
+gwqmosta
+subasta
+
+OK SELECT UpdateGeometrySRID('ppobsta_wra_e','geom',3826);
+select * from geometry_columns where f_table_name='ppobsta_wra_e';
+
+-- 109年6月新竹市統計區人口統計_最小統計區_SHP
+select * from "109年6月新竹縣統計區人口統計_最小統計區" limit 3;
+select * from "109年6月新竹市統計區人口統計_最小統計區" limit 3;
+select * from "109年6月新竹縣統計區人口指標_最小統計區" limit 3;
+select * from "109年6月新竹市統計區人口指標_最小統計區" limit 3;
+
+-- 6932-自來水用水量
+select * from "6932-自來水用水量";
+
+ Table "public.6932-自來水用水量"
+                   Column                    |       Type       | Collation | Nullable | Default
+---------------------------------------------+------------------+-----------+----------+---------
+ index                                       | bigint           |           |          |
+ County                                      | text             |           |          |
+ Month                                       | bigint           |           |          |
+ TheDailyDomesticConsumptionOfWaterPerPerson | double precision |           |          |
+ Town                                        | text             |           |          |
+ Year                                        | bigint           |           |          |
+
+select * from "6932-自來水用水量" where "County"='新竹市' order by "Year","Month"::INTEGER;
+select "Month",avg("TheDailyDomesticConsumptionOfWaterPerPerson") from "6932-自來水用水量" where "County"='新竹市' group by "Month" order by  "Month"::INTEGER;
+
+\copy ( select * from "6932-自來水用水量" where "County"='新竹市' order by "Year","Month"::INTEGER) To '/tmp/test.csv' With CSV HEADER
+
+\copy ( select "Month",avg("TheDailyDomesticConsumptionOfWaterPerPerson") from "6932-自來水用水量" where "County"='新竹市' group by "Month" order by  "Month"::INTEGER) To '~/Downloads/water.csv' With CSV HEADER
+
+--
+Create a read-only user in PostgreSQL
+1. To create a new user in PostgreSQL:
+CREATE USER lass WITH PASSWORD 'lass123456';
+
+2. GRANT the CONNECT access:
+GRANT CONNECT ON DATABASE postgis TO lass;
+
+3. Then GRANT USAGE on schema:
+GRANT USAGE ON SCHEMA public TO lass;
+
+4. GRANT SELECT
+Grant SELECT for a specific table:
+GRANT SELECT ON table_name TO username;
+Grant SELECT for multiple tables:
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO lass;
+If you want to grant access to the new table in the future automatically, you have to alter default:
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO lass;
+
+-- test time series data
+CREATE TABLE t_time_series (
+    dt bigint,
+    id VARCHAR,
+    value float
+);
+
+INSERT INTO t_test1 VALUES (1,'test1', 2.3);
+
+delete from t_time_series where dt=1625821800;
+INSERT INTO t_time_series VALUES (1625821800,'riverlog_rain_hourdiff_station_cnt', 2.00);
+
+select * from t_time_series where dt=1625821800;
+
+drop table t_test1;
+
+-- e_river_state_q
+select * from e_river_state_q;
+
+      Column      |  Type  | Collation | Nullable | Default
+------------------+--------+-----------+----------+---------
+ index            | bigint |           |          |
+ 統計期           | text   |           |          |
+ 統計區           | text   |           |          |
+ 監測站數         | text   |           |          |
+ 溶氧量平均值     | text   |           |          |
+ 生化需氧量平均值 | text   |           |          |
+ 懸浮固體平均值   | text   |           |          |
+ 氨氮平均值       | text   |           |          |
+ 溶氧量最大值     | text   |           |          |
+ 生化需氧量最大值 | text   |           |          |
+ 懸浮固體最大值   | text   |           |          |
+ 氨氮最大值       | text   |           |          |
+
+select * from e_river_state_q where "統計區"='頭前溪' order by "統計期"
+
+--
+select table_name,table_type from information_schema.tables where table_schema ='public' and table_type='BASE TABLE' order by table_name
+
+\copy ( select table_name,table_type from information_schema.tables where table_schema ='public' and table_type='BASE TABLE' order by table_name) To '~/Downloads/debug.csv' With CSV HEADER
+
+--information_schema.routines
+select * from information_schema.routines;
+
+
+\copy ( select * from information_schema.routines) To '~/Downloads/debug.csv' With CSV HEADER
+
+
+-- desc A1
+select max("CKDATE") from e_waterwork_q;
+select DISTINCT "ITEM","CKDATE","ITEMVAL" from e_waterwork_q where "PLANT"='新竹給水廠新竹第二淨水場' and "TOWNSHIP"='東區' and "CKDATE" like '110.01.%'  order by "CKDATE";
+
+select "ITEM",CAST("CKDATE" as date),"ITEMVAL" from e_waterwork_q where "PLANT"='新竹給水廠新竹第二淨水場' and "TOWNSHIP"='東區' and "CKDATE">= '110.01.01' and "CKDATE"< '110.02.01' order by "CKDATE";
+
+
+select * from e_waterwork_q where "ITEM"='合格' and not "ITEMVAL"='1' order by "CKDATE";
+
+select EXTRACT(YEAR FROM max(date)) as year,EXTRACT(MONTH FROM max(date)) as month from s_waterwork_qty where waterwork='寶山淨水廠'
+
+select max(date) from s_waterwork_qty where waterwork='寶山淨水廠'
+select * from s_waterwork_qty where waterwork='寶山淨水廠' and date >='2021-5-1' and date < '2021-6-1'
+
+select * from m_waterwork_quality where '淨水場名稱'='新竹第二淨水場';
+
+select "日期","區處別","系統代號","淨水場名稱","項目","值","單位","飲用水水質標準" from m_waterwork_quality where "淨水場名稱"='新竹第二淨水場' and "項目" in ('汞(Mercury)','砷(Arsenic)','硒(Selenium)','鉛(Lead)','鉻(Chromium)','鎘(Cadmium)','氨氮(Ammonia)','大腸桿菌群(Coliform Group)','大腸桿菌群(Coliform Group)');
+
+
+select * from s_waterin_qty where waterin='隆恩堰' order by date;
+select max(date) from s_waterin_qty where waterin='隆恩堰'
+select * from s_waterin_qty where waterin='隆恩堰' and date >='2021-5-1' and date < '2021-6-1'
+
+waterin |     date      |  qty
+---------+---------------+--------
+ 隆恩堰  | 0110年4月1日  | 127744
+
+select max(date) as date from s_waterin_quality; #2021-03-22
+select * from s_waterin_quality where waterwork='第二淨水場' and date >='2021-3-1' and date < '2021-4-1';
+ 
+    date    | waterwork  |      item       |  value  | limit
+------------+------------+-----------------+---------+-------
+ 2021-03-22 | 第二淨水場 | 大腸桿菌群      | 2800    | 20000
+
+-- s_waterin_b
+# add geom field, after first import
+SELECT AddGeometryColumn('s_waterin_b','geom','3826','POINT','2');
+UPDATE s_waterin_b SET geom = ST_PointFromText(wkt_geom);
+CREATE INDEX s_waterin_b_geom_idx ON public.s_waterin_b USING gist (geom)
+
+
+select * from s_waterin_b where name='頭前溪(隆恩堰）';
+select ST_AsText(ST_Transform(geom,4326)) from s_waterin_b where name='頭前溪(隆恩堰）';
+
+select river_name, ST_Transform(ST_SetSRID(geom,3826), 4326) from riverpoly_rivercode where river_name='頭前溪';
+
+
+--
+select * from "b_水門";
+
