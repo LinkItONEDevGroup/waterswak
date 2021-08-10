@@ -13,6 +13,7 @@ import matplotlib.dates as mdate
 import codes.ui as ui
 import codes.globalclasses as gc
 from codes.const import *
+from codes.lib import *
 
 ##### Code section #####
 #Spec: simulation control, log managment, setting load/save
@@ -56,4 +57,18 @@ class SApp:
     def reset(self):
         gc.SETTING.reload()
         self.user_vars={}
+        self.pd={}
+        load_ods(self.pd,0)
+    def desc_pd(self,pd_key,col_brief=''):
+        if pd_key in self.pd.keys():
+            print("df key=%s" %(pd_key))
+            df=self.pd[pd_key]
+            if col_brief=='NOGEOM':
+                if 'geometry' in df.columns:
+                    print(df.drop('geometry', axis=1))
+                else:
+                    print(df)
+            else:
+                print(df)
+
 

@@ -815,6 +815,8 @@ select * from "25598-台灣各工業區範圍圖資料集";
 shp2pgsql -W UTF-8 -D -s 102443 -I "./data/8818-工業區污水處理廠分布位置圖/工業區污水處理廠分布_121.shp" "8818-工業區污水處理廠分布位置圖">> data/shp.sql
 
 select * from "8818-工業區污水處理廠分布位置圖";
+select distinct "工業區名稱" from "8818-工業區污水處理廠分布位置圖"
+select distinct "所在工業區" from "8818-工業區污水處理廠分布位置圖" where "所在工業區" like '%新竹%'
 
 -- /stat_p_45 垃圾清理量資料 "total": 902 -> e_trash_stat_qty
 labels={'year': '年度', 'month': '月份', 'county': '縣市別', 'GarbageGenerated': '垃圾產生量', 'GarbageClearance': '垃圾清運量', 'GarbageRecycled': '資源回收量', 'FoodWastesRecycled': '廚餘回收量', 'BulkWasteRecyclingandReuse': '巨大垃圾回收再利用量'}
@@ -1016,3 +1018,125 @@ select river_name, ST_Transform(ST_SetSRID(geom,3826), 4326) from riverpoly_rive
 --
 select * from "b_水門";
 
+
+-- #頭前溪流域內的水質測站
+select * from basin where basin_name='頭前溪'
+select * from e_river_station
+
+
+select * from geometry_columns where f_table_name='riverpoly_rivercode';
+
+SELECT UpdateGeometrySRID('e_river_station','geom',3826);
+select * from geometry_columns where f_table_name='ppobsta_wra_e';
+
+
+-- schema 測試
+CREATE SCHEMA hackathon;
+
+CREATE TABLE hackathon.t_test1 (
+    dt bigint,
+    id VARCHAR,
+    value float
+);
+
+ALTER TABLE t_test SET SCHEMA hackathon;
+
+#CREATE SCHEMA hackathon AUTHORIZATION team_test
+
+CREATE ROLE team with LOGIN
+GRANT USAGE ON SCHEMA hackathon TO team;
+
+
+createuser -D team_mgr -g team -P -R -p 5431 -U postgres
+
+psql -h localhost -p 5431 -U team_mgr postgis -W
+
+ALTER USER postgres PASSWORD 'myPassword';
+
+ALTER TABLE e_waterwork_q SET SCHEMA hackathon;
+e_cwms_hsinchu
+e_factory_base
+e_garbage_disposal
+e_river_q
+e_river_season_q
+e_river_state_q
+e_trash_recycle
+e_trash_stat_qty
+e_waterwork_q
+
+SET search_path TO "$user",hackathon,public;
+ALTER ROLE team SET search_path TO "$user",hackathon,public;
+ALTER USER team_mgr SET search_path TO "$user",hackathon,public;
+
+ALTER USER team_test RENAME TO team_mgr;
+
+select * from e_river_q;
+
+GRANT SELECT, UPDATE, INSERT, DELETE, TRUNCATE ON
+ALL TABLES IN SCHEMA hackathon TO team;
+
+GRANT SELECT, UPDATE, INSERT, DELETE, TRUNCATE ON
+ALL TABLES IN SCHEMA public TO team;
+
+-- 查 GPS 鄉鎮
+select townname from town_moi where ST_Intersects('SRID=3826;POINT(268313 2733131)'::geometry,ST_Transform(ST_SetSRID(geom,3824),3826))
+
+select townname,villname from village_moi_121 where ST_Intersects('SRID=3826;POINT(268313 2733131)'::geometry,ST_SetSRID(geom,3826))
+
+--22371-工業區污水處理廠放流水水質資
+select * from "22371-工業區污水處理廠放流水水質資訊" where "日期">20210101;
+select max("日期") from "22371-工業區污水處理廠放流水水質資訊"
+select distinct "廠名" from "22371-工業區污水處理廠放流水水質資訊";
+select distinct "日期" from "22371-工業區污水處理廠放流水水質資訊" where "日期">20210301 and "廠名"='新竹' ;
+select * from "22371-工業區污水處理廠放流水水質資訊" where "日期">20210301 and "廠名"='新竹' ;
+
+select * from "22371-工業區污水處理廠放流水水質資訊" where "日期">20210101;
+
+--8818-工業區污水處理廠分布位置圖
+
+select "所在工業區" from "8818-工業區污水處理廠分布位置圖" where "所在工業區" like '%竹圍子%';
+order by "所在工業區";
+
+--95103-工業局所轄污水處理廠基本資料
+select * from "95103-工業局所轄污水處理廠基本資料";
+select "污水處理廠名稱" from "95103-工業局所轄污水處理廠基本資料" where "污水處理廠名稱" like '%大發%';
+
+-- [DB]e_factory_base-EPAAPI:ems_s_01 環境保護許可管理系統(暨解除列管)對象基本資料 在  [DB]rivregln-中央管河川區域 裡面
+
+select * from e_factory_base limit 1
+select count(*) from e_factory_base
+select rv_name from rivregln limit 10
+
+
+CREATE OR REPLACE VIEW t_e_factory_base_in_river as
+select S.*
+from hackathon.e_factory_base as S
+join rivregln as R
+    on ST_Intersects(R.geom,S.geom)
+
+OK SELECT UpdateGeometrySRID('rivregln','geom',3826);
+select * from geometry_columns where f_table_name='e_factory_base';
+
+-- 3826->4326
+select 'SRID=3826;POINT(268552 2733033)'::geometry
+select ST_AsEWKT(ST_Transform('SRID=3826;POINT(268552 2733033)'::geometry, 4326)) as wkt
+
+-- DB output CSV
+\copy ( select * from rivercode) To 'output/rivercode.csv' With CSV HEADER
+
+-- 地理欄位都叫做 geom
+select * from geometry_columns where f_table_name='county_moi';
+select * from geometry_columns where not f_geometry_column='geom'
+
+-- column rename
+ALTER TABLE village_moi_121 RENAME COLUMN bbox TO sim_geom;
+
+DROP TABLE IF EXISTS highway_test;
+DROP TABLE [ IF EXISTS ] name [, ...] [ CASCADE | RESTRICT ]
+
+--
+SELECT table_schema,table_name,column_name,data_type FROM information_schema.columns where column_name like '%date%' and table_schema in ('public','hackathon')
+
+-- 頭前溪水質測站位置
+select * from e_river_station where basin='頭前溪流域'
+\copy ( select * from e_river_station where basin='頭前溪流域') To 'output/test.csv' With CSV HEADER

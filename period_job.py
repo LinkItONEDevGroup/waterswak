@@ -2,7 +2,7 @@
 
 import time
 import random
-
+import sys
 import pandas as pd
 from codes.db import *
 from codes.lib import *
@@ -32,12 +32,32 @@ while True:
         sql="INSERT INTO t_time_series VALUES (%i,'pm25_74DA38B053E4', %.2f);" %(t_value,pm25)
         period=300
     if case_id=="riverlog_rain_hourdiff_station_cnt":
-        result = riverlog_rain_hourdiff_mon(gd,10)
-        print("riverlog_rain_hourdiff_station_cnt=%s" %(result))
-        date_obj = datetime.strptime(result[0], "%Y-%m-%d %H:%M:%S")
-        t_value = date_obj.timestamp()
-        sqls.append("delete from t_time_series where dt=%i" %(t_value))
-        sqls.append("INSERT INTO t_time_series VALUES (%i,'%s', %.2f);" %(t_value,case_id,result[1]))
+        try:
+            resultA = riverlog_rain_hourdiff_mon(gd,10)
+            t_id="riverlog_rain_hourdiff_station_10cnt"
+            print("%s=%s" %(t_id,resultA))
+            date_obj = datetime.strptime(resultA[0], "%Y-%m-%d %H:%M:%S")
+            t_value = date_obj.timestamp()
+            sqls.append("delete from t_time_series where dt=%i" %(t_value))
+            sqls.append("INSERT INTO t_time_series VALUES (%i,'%s', %.2f);" %(t_value,t_id,resultA[1]))
+
+            df = gd['rain-hourdiff']
+            df_cal = df[df['rain_1hour']>=40]
+            overlimit_cnt  = len(df_cal.index)
+
+            t_id="riverlog_rain_hourdiff_station_40cnt"
+            print("%s:" %(t_id))
+            print(df_cal)
+
+            #date_obj = datetime.strptime(resultB[0], "%Y-%m-%d %H:%M:%S")
+            #t_value = date_obj.timestamp()
+            #sqls.append("delete from t_time_series where dt=%i" %(t_value))
+            sqls.append("INSERT INTO t_time_series VALUES (%i,'%s', %.2f);" %(t_value,t_id,overlimit_cnt))
+
+        except ValueError:
+            print(ValueError)
+        except:
+            print("Unexpected error:", sys.exc_info()[0])
         period=10*60
 
     if len(sqls)>0:

@@ -119,8 +119,10 @@ def df_to_db(table_name,df,action_str='replace'):
     from sqlalchemy import create_engine
 
     dataFrame = df
+    user="postgres" #"team_mgr"
+    pwd="your_password" 
     # Create an engine instance
-    alchemyEngine   = create_engine('postgresql+psycopg2://postgres:your_password@127.0.0.1:5431/postgis', pool_recycle=3600);
+    alchemyEngine   = create_engine('postgresql+psycopg2://%s:%s@127.0.0.1:5431/postgis' %(user,pwd), pool_recycle=3600);
     postgreSQLConnection    = alchemyEngine.connect();
     postgreSQLTable         = table_name
 

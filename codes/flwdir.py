@@ -46,7 +46,7 @@ class FlwDir():
         self.gdf_paths = None # downstream path
         self.gdf_pnts =  None # downstream point
 
-    def reload(self,dtm_file='data/C1300_20m_elv0.tif',flwdir_file='data/C1300_20m_LDD.tif'):
+    def reload(self,dtm_file='data/catchment/C1300_20m_elv0.tif',flwdir_file='data/catchment/C1300_20m_LDD.tif'):
 
         with rasterio.open(flwdir_file, 'r') as src1:
             self.flwdir = src1.read(1)
@@ -105,7 +105,7 @@ class FlwDir():
 
     def streams(self, min_sto, filename=None): # None: return json, '' use default filename
         #河道
-        feats = self.flw.streams(min_sto=9)
+        feats = self.flw.streams(min_sto=min_sto)
         self.gdf = gpd.GeoDataFrame.from_features(feats, crs=self.crs)
 
         if filename=='':
@@ -114,8 +114,9 @@ class FlwDir():
         if filename is None:
             return self.gdf.to_json()
         else:
-            #print("filename=%s" %(filename))
-            self.gdf.to_file(filename, driver='GeoJSON')
+
+            self.gdf.to_file(filename, driver='GeoJSON',index=True)
+            print("stream saved filename=%s" %(filename))
 
     def subbasins_streamorder(self,min_sto, filename=None):# None: return json, '' use default filename
         # calculate subbasins with a minimum stream order 7
@@ -128,6 +129,7 @@ class FlwDir():
             return self.gdf_subbas.to_json()
         else:
             self.gdf_subbas.to_file(filename, driver='GeoJSON')
+            print("subbas saved filename=%s" %(filename))
 
     def path(self,points,filename=None): # None: return json, '' use default filename
         # 算通過點的下游路線
@@ -152,6 +154,7 @@ class FlwDir():
             return self.gdf_paths.to_json()
         else:
             self.gdf_paths.to_file(filename, driver='GeoJSON')
+            print("path saved:%s" %(filename))
 
     def basins(self,points,filename=''): # None: return json, '' use default filename
         # 通過點的上游流域
@@ -162,7 +165,7 @@ class FlwDir():
         crs = self.crs
         featss = []
         for p in points:
-            x, y = np.array([p[0], p[0]+250]), np.array([p[1], p[1]+250])
+            x, y = np.array([p[0], p[0]]), np.array([p[1], p[1]])
             name = p[2]
             subbasins = self.flw.basins(xy=(x,y), streams=self.flw.stream_order()>=4)
             gdf_bas = self.vectorize(subbasins.astype(np.int32), 0, self.flw.transform,self.crs)
@@ -184,9 +187,10 @@ class FlwDir():
             return self.gdf_bas.to_json()
         else:
             self.gdf_bas.to_file(filename, driver='GeoJSON')
+            print("point catchment saved: %s" %(filename))
 
 
-    def desc_stream(self):
+    def desc_stream(self,cfg_dict={'seg_info':1,'link_info':1,'dot_info':1}):
         # 觀察 stream 的連接性
         coords={}
         for index, row in self.gdf.iterrows():
@@ -195,20 +199,29 @@ class FlwDir():
             points = list(line.coords)
             start = points[0]
             end = points[len(points)-1]
-            coords[index]=[start,end]
+            line_len = line.length
+            coords[index]=[start,end,line_len]
             seg_cnt = len(line.coords)
-            print("index=%i,length=%i,seg cnt=%i,avg_len=%.1f,start=%s,end=%s,idxs=%i" %(index,line.length,seg_cnt,line.length/seg_cnt,start,end,idxs))
+            if cfg_dict['seg_info']==1:
+                print("index=%i,length=%i,seg cnt=%i,avg_len=%.1f,start=%s,end=%s,idxs=%i" %(index,line.length,seg_cnt,line.length/seg_cnt,start,end,idxs))
 
         link={}
+
         for key in coords.keys():
-            start,end = coords[key]
+            no_link=True
+            start,end,line_len = coords[key]
             for key2 in coords.keys():
-                start2,end2 = coords[key2]
+                start2,end2,line_len = coords[key2]
                 if end==start2:
                     if key in link:
-                        print("index=%i already have start=%i" %(key,link[key]))
+                        if cfg_dict['link_info']==1:
+                            print("index=%i already have start=%i" %(key,link[key]))
                     link[key]=key2
-        print("link=%s" %(link))
+                    no_link=False
+            if no_link:
+                link[key]=key
+        if cfg_dict['link_info']==1:
+            print("link=%s" %(link))
 
         if 0:
             for i in range(len(gdf.index)):
@@ -219,7 +232,9 @@ class FlwDir():
                     print("index=%i,info=%s" %(index,gdf.iloc[i]))
 
         for l in link:
-            print("N%i->N%i" %(l,link[l]))
+            if cfg_dict['dot_info']==1:
+                print("N%i->N%i" %(l,link[l]))
+        return [coords,link]
     def join_line(self,wkt_str):
         #圳路接入主流
         # line_ori:要修改的線, line_need:想加入的線, line_append:更新起點的想加入線, line_split:要修改的線被匯流點切開的結果
@@ -262,4 +277,27 @@ class FlwDir():
         self.gdf.drop(idx_min,axis=0,inplace=True)
         self.gdf.to_file('output/river_c1300_mergeline.geojson', driver='GeoJSON')
 
+    #單點到 stream 資訊: 距離，最近點，哪一個線段
+    def point_with_streams(self,point_src,dist_min=5000): #[253520,2743364]
+
+        point = Point(point_src[0],point_src[1])
+        #dist_min=5000
+        idx_min=None
+        for index, row in self.gdf.iterrows():
+            line = row['geometry']
+            dist = line.distance(point)
+            if dist<dist_min:
+                dist_min=dist
+                idx_min=index
+        #print("index=%i, minimal distance=%f" %(idx_min,dist_min))
+        if idx_min is None:
+            return None
+        else:
+            line_ori = self.gdf.loc[idx_min]['geometry']
+
+            pt_in = nearest_points(line_ori, point)[0]
+            #print(pt_in.coords[0][0])
+            xy=pt_in.coords[0]
+
+            return [idx_min,dist_min,xy[0],xy[1]] #index, distance, point_x, point_y
 

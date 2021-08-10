@@ -1,0 +1,21 @@
+name: py37_waterswak
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.7
+  - pandas=1.0.5
+  - odfpy
+  - psycopg2
+  - requests
+  - pandasql
+  - csvkit
+  - configobj
+  - matplotlib
+  - networkx
+  - pyflwdir
+  - rasterio
+  - cartopy
+  - descartes
+  - geopandas
+prefix: /Volumes/F2020/opt/anaconda3/envs/py37_waterswak

@@ -27,6 +27,7 @@ if __name__ =='__main__':
     # If the input parameter is invalid, then display usage and return "command
     # line syntax" error code.
     apmode = AP_MODE_NORMAL
+    debug_mode = DEBUG_MODE_OFF
 
     #command line paramters handler
     try:
@@ -43,8 +44,6 @@ if __name__ =='__main__':
     except getopt.GetoptError:
         print ('usage: waterswak.py [ -h ] [ -t ]')
         sys.exit(2) 
-    
-    
 
     #init global classes   
     gc.SETTING  = ConfigObj("include/waterswak.ini")
@@ -58,6 +57,14 @@ if __name__ =='__main__':
         suite = unittest.TestLoader().loadTestsFromTestCase(ut.UTGeneral)
         unittest.TextTestRunner(verbosity = 2).run(suite)
     else:
-        
-        gc.CLI.cmdloop()
-    
+        if debug_mode==DEBUG_MODE_ON:
+            while 1:
+                ret=1
+                try:
+                    ret = gc.CLI.cmdloop() #normal exit return None
+                except:
+                    print("Broken Safe Exception!")
+                if ret is None:
+                    break
+        else:
+                gc.CLI.cmdloop()

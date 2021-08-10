@@ -514,6 +514,8 @@ def rain_hourdiff(bag, time_set,station_city):
     #df[f_station]
     #df['city'].unique()
     if len(df_f.index)>0:
+        #print(df_f)
+        df_f = df_f.drop_duplicates(['stationName','timeGMT8'])
         df_pivot = df_f.pivot(index='stationName', columns='timeGMT8', values='now')
         print("time_set=%s" %(time_set))
         #print(df_pivot)
@@ -859,6 +861,7 @@ def riverlog_rain_hourdiff_mon(bag,limit):
     station_city=None
     time_now = datetime.now()
     time_set = get_2slot(time_now-timedelta(minutes = 80),1)
+    print("time_set=%s" %(time_set))
     #time_set=['2021-06-11 08:00:00','2021-06-11 09:00:00']
     rain_load(bag, date_str,0,True)
     ret = rain_hourdiff(bag,time_set,station_city)

@@ -24,15 +24,17 @@ sql_keypairs = {"basin_test1":"select * from public.basin where basin_name in (%
                  from public.basin where basin_name ='%s'))"}
 
 
-def load_ods(bag):
+def load_ods(bag,show_msg=1):
     ods_name="sys"
     sys_sts = pd.read_excel("include/%s.ods" %(ods_name), engine="odf",sheet_name=None)
-    print("%s 的 sheets:\n %s " % (ods_name,sys_sts.keys()))
+    if show_msg:
+        print("%s 的 sheets:\n %s " % (ods_name,sys_sts.keys()))
     bag[ods_name]=sys_sts
 
     ods_name="basic"
     basic_sts = pd.read_excel("include/%s.ods" %(ods_name), engine="odf",sheet_name=None)
-    print("%s 的 sheets:\n %s " % (ods_name,basic_sts.keys()))
+    if show_msg:
+        print("%s 的 sheets:\n %s " % (ods_name,basic_sts.keys()))
     bag[ods_name]=basic_sts
 
 def api_to_csv_rename(name, new_name,par):
@@ -267,3 +269,15 @@ def xml_to_df(filename):
     for ser in sers:
         df = df.append(ser,ignore_index=True)
     return df
+
+def sqldf(df,sql,filename=''):
+    try:
+        m1_df= ps.sqldf(sql, locals())
+        print(m1_df)
+        if not filename=='':
+            m1_df.to_csv(filename)
+            print("CSV file saved: %s" %(filename))
+        return m1_df
+    except:
+        print("EXCEPTION: sql=%s" %(sql))
+
