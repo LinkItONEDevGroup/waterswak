@@ -1024,7 +1024,7 @@ select * from basin where basin_name='頭前溪'
 select * from e_river_station
 
 
-select * from geometry_columns where f_table_name='riverpoly_rivercode';
+select * from geometry_columns where f_table_name='e_river_station';
 
 SELECT UpdateGeometrySRID('e_river_station','geom',3826);
 select * from geometry_columns where f_table_name='ppobsta_wra_e';
@@ -1125,7 +1125,7 @@ select ST_AsEWKT(ST_Transform('SRID=3826;POINT(268552 2733033)'::geometry, 4326)
 \copy ( select * from rivercode) To 'output/rivercode.csv' With CSV HEADER
 
 -- 地理欄位都叫做 geom
-select * from geometry_columns where f_table_name='county_moi';
+select * from geometry_columns where f_table_name='e_river_station';
 select * from geometry_columns where not f_geometry_column='geom'
 
 -- column rename
@@ -1138,5 +1138,9 @@ DROP TABLE [ IF EXISTS ] name [, ...] [ CASCADE | RESTRICT ]
 SELECT table_schema,table_name,column_name,data_type FROM information_schema.columns where column_name like '%date%' and table_schema in ('public','hackathon')
 
 -- 頭前溪水質測站位置
-select * from e_river_station where basin='頭前溪流域'
+select sitename,twd97lon,twd97lat,twd97tm2x,twd97tm2y,ST_AsEWKT(ST_Transform(geom, 4326)) as wkt_4326,ST_AsEWKT(geom) as wkt_3826 from e_river_station where basin='頭前溪流域';
 \copy ( select * from e_river_station where basin='頭前溪流域') To 'output/test.csv' With CSV HEADER
+
+-- srid transfer
+SELECT ST_AsEWKT('SRID=3826;POINT(268454 2733084)'::geometry);
+

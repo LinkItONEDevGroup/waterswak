@@ -1,4 +1,4 @@
-name: py37_waterswak
+name: waterswak
 channels:
   - defaults
   - conda-forge
@@ -17,5 +17,9 @@ dependencies:
   - rasterio
   - cartopy
   - descartes
-  - geopandas
-prefix: /Volumes/F2020/opt/anaconda3/envs/py37_waterswak
+  - geopandas=0.8.1
+  - decorator
+  - fiona=1.8.18
+  - libcurl=7.77.0
+  - jupyter
+prefix: 

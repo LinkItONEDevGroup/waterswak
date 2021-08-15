@@ -4,21 +4,20 @@
 #standard
 import cmd
 import logging
+
 #extend
-import pandas as pd
-import pandasql as ps
+#import pandas as pd
+#import pandasql as ps
 import geopandas
 #library
 import codes.globalclasses as gc
 from codes.const import *
-from codes.db import *
+#from codes.db import *
 from codes.lib import *
 from codes.riverlog import *
 from codes.tools import *
-
 from codes.flwdir import *
 from shapely.geometry import *
-
 
 
 DOMAIN_SET_LOAD_SKIP=0
@@ -69,22 +68,6 @@ class Cli(cmd.Cmd):
         pd.set_option('display.max_rows', int(gc.SETTING["MAX_ROWS"]))
         pd.set_option('display.max_columns', int(gc.SETTING["MAX_COLUMNS"]))
         pd.set_option('display.max_colwidth', int(gc.SETTING["MAX_COLWIDTH"]))
-    def do_status(self,line):
-        """ show current status 
-            status {desc_id}
-            desc_id: 0-summary info, 1- detail info, 2- dot graph
-            ex: status 1
-        """
-        pars=line.split()
-        desc_id = 1
-        if len(pars)==1:
-            desc_id = pars[0]
-        if desc_id=="connect":
-            gc.GAP.conn=connect_db()
-            if gc.GAP.conn is None:
-                return "DB connection fail!"
-            return ""
-        #logging.info(gc.GAP.mm.desc(desc_id))
 
     def do_displayall(self,line):
         """set record display all or brief
@@ -294,6 +277,22 @@ ex: rivercode_search 120.6666785 24.1755573
         else:
             print("search %f %f: %s " %(x,y,data))
 
+
+    def do_to_crs(self,line):
+        """crs transfer
+to_crs x y src_crs dst_crs
+ex: to_crs 121.1359083 24.74512778 4326 3826
+        """
+        pars=line.split()
+        if len(pars)==4:
+            x = float(pars[0])
+            y = float(pars[1])
+            src_crs = int(pars[2])
+            dst_crs = int(pars[3])
+        else:
+            return
+        xy=to_crs([x, y], src_crs, dst_crs)
+        print("(%f %f)@%i -> (%f %f)@%i" %(x,y,src_crs,xy[0],xy[1],dst_crs))
     def do_quit(self, line):
         """quit this sub command"""
         """quit"""
@@ -537,16 +536,40 @@ cx_dict={'basin_id':1300, 'basin_name':'頭前溪', 'geo':'data/basin-河川流�
         """set/load basin
 set_basin [basin_id]
     if basin_id not supported, will display supported basin_id
-ex: set_basin 1300
+ex: set_basin list
+    set_basin 1300
         """
         pars=line.split()
         basin_id='1300'
         if len(pars)==1:
             basin_id = pars[0]
         self.set_basin(basin_id)
+    def get_nearest_point_in_stream(self,point_src,dist_min=10000):
+        #dist_min=10000
+        idx_min=None
+        point = None
+        for index2, row2 in self.fd.gdf.iterrows():
+            line = row2['geometry']
+            dist = line.distance(point_src)
+            if dist<dist_min:
+                dist_min=dist
+                idx_min=index2
+        if idx_min:
+            #print("point_id=%s%s,index=%i, minimal distance=%f" %(row['id'],row['name'],idx_min,dist_min))
+            line_ori = self.fd.gdf.loc[idx_min]['geometry']
 
+            pt_in = nearest_points(line_ori, point_src)[0]
+            #print(pt_in.coords[0][0])
+            xy=pt_in.coords[0]
+            #point = [xy[0],xy[1],"%s|%s" %(row['id'],row['name'])]
+            point = [xy[0],xy[1]]
+
+        #else:
+        #    print("index=%i, id=%s too far, > %i" %(index,row['id'],dist_min))
+        return point
     def point_catchment_gen(self,csv_filename):
-        sto=7
+        sto=self.sto
+        dist_min=10000
         filename = 'output/river_c%s_stream_%i.geojson' %(self.basin_id,sto)
         self.fd.streams(sto,filename)
         print("generating point_catchment by using stream(sto=%i)" %(sto))
@@ -558,24 +581,10 @@ ex: set_basin 1300
 
             start = Point(row['twd97tm2x'], row['twd97tm2y'])
             #start = row['geom']
-
-            dist_min=10000
-            idx_min=None
-            for index2, row2 in self.fd.gdf.iterrows():
-                line = row2['geometry']
-                dist = line.distance(start)
-                if dist<dist_min:
-                    dist_min=dist
-                    idx_min=index2
-            if idx_min:
-                print("point_id=%s%s,index=%i, minimal distance=%f" %(row['id'],row['name'],idx_min,dist_min))
-                line_ori = self.fd.gdf.loc[idx_min]['geometry']
-
-                pt_in = nearest_points(line_ori, start)[0]
-                #print(pt_in.coords[0][0])
-                xy=pt_in.coords[0]
-                point = [xy[0],xy[1],"%s|%s" %(row['id'],row['name'])]
-                points.append(point)
+            point = self.get_nearest_point_in_stream(start)
+            if point:
+                point_name = [point[0],point[1],"%s|%s" %(row['id'],row['name'])]
+                points.append(point_name)
             else:
                 print("index=%i, id=%s too far, > %i" %(index,row['id'],dist_min))
         #print(points)
@@ -588,18 +597,25 @@ ex: set_basin 1300
         #self.fd.gdf_bas
 
     def do_output(self,line):
-        """output different level of stream, subbas ....
-output [type] [filename]
+        """output different level of stream, subbas , point_catchment, downstream path ....
+output [type] [...]
     type:
         stream : stream sto from 4-11,
         subbas : sto from 4-11,
-        point_catchment csv_filename : -need csv filename input
+        point_catchment_csv csv_filename : -need csv filename input or x,y for single point
+        point_catchment x,y : - x,y for single point
         path x,y [x,y] [...] : generate downstream path
         point_near x,y [min_distance] :  get stream nearest information by point, line_index, distance, point_x, point_y
+        2point x1,y1 x2,y2 [min_distance] : desc 2point path, path length, river length
+        nx_write_shp : output network to shp
 ex: output stream
-    output point_catchment "data/喝好水 吃好物 有良居-公民協力 - 點位集水區.csv"
+    output subbas
+    output point_catchment_csv "data/喝好水 吃好物 有良居-公民協力 - 點位集水區.csv"
+    output point_catchment 253520,2743364
     output path 253520,2743364
     output point_near 253520,2743364 5000
+    output 2point 262572,2736940 247346,2747132 5000
+    output nx_write_shp
         """
         id = "stream"
         #filename = "data/喝好水 吃好物 有良居-公民協力 - 點位集水區.csv"
@@ -616,7 +632,7 @@ ex: output stream
             for i in range(4,12):
                 filename = 'output/river_c%s_subbas_%i.geojson' %(self.basin_id,i)
                 self.fd.subbasins_streamorder(i,filename)
-        if id =="point_catchment":
+        if id =="point_catchment_csv":
             pars1=line.split("\"")
             if len(pars1)!=3:
                 print("should follow the format")
@@ -625,7 +641,33 @@ ex: output stream
             if os.path.isfile(csv_filename):
                 self.point_catchment_gen(csv_filename)
             else:
-                print("%s not exist!" %(csv_filename))
+                print("CSV not exist!")
+        if id =="point_catchment":
+            if len(pars)>=2:
+                xy_str=pars[1]
+                xy = xy_str.split(",")
+
+                sto=self.sto
+                dist_min=10000
+                filename = 'output/river_c%s_stream_%i.geojson' %(self.basin_id,sto)
+                self.fd.streams(sto,filename)
+                print("generating point_catchment by using stream(sto=%i)" %(sto))
+
+                points=[]
+                start = Point(float(xy[0]),float(xy[1]))
+                point = self.get_nearest_point_in_stream(start)
+                if point:
+                    point_name = [point[0],point[1],"point_catchment"]
+                    points.append(point_name)
+                else:
+                    print("(%s) too far, > %i" %(xy_str,dist_min))
+                for p in points:
+                    print("%s,%s,%s" %(p[0],p[1],p[2]))
+
+                #points=[[260993,2735861,'油羅上坪匯流'],[253520,2743364,'隆恩堰'],[247785,2746443,'湳雅取水口']]
+                self.fd.basins(points,'') #need 3826
+
+
         if id=="path":
             points=[]
             for i in range(1,len(pars)):
@@ -647,6 +689,54 @@ ex: output stream
                 print("line_index=%i, distance=%.3f, point_x=%.3f, point_y=%.3f" %(res[0],res[1],res[2],res[3]))
             else:
                 print("distnace too far, min=%.3f" %(min_dist))
+        if id=="2point":
+            min_dist=5000
+            if len(pars)>=4:
+                xy1_str=pars[1]
+                xy2_str=pars[2]
+                min_dist = int(pars[3])
+            else:
+                return
+            xy1 = xy1_str.split(",")
+            xy2 = xy2_str.split(",")
+            xys = [xy1,xy2]
+
+            line_idxs=[]
+            line_lengths=[]
+            idx=0
+            for xy in xys:
+                print("Point(%s %s):" %(xy[0],xy[1]))
+                res = self.fd.point_with_streams([float(xy[0]),float(xy[1])],min_dist)
+                if res:
+                    print("\tline_index=%i, distance=%.3f, point_x=%.3f, point_y=%.3f" %(res[0],res[1],res[2],res[3]))
+                    [line_length,length_from_start]=self.fd.point_distance_in_line(res[0],[res[2],res[3]])
+                    print("\tline_length=%f,length_from_start=%f" %(line_length,length_from_start))
+                    line_idxs.append(res[0])
+                    if idx==0:
+                        line_lengths.append(line_length-length_from_start)
+                    else:
+                        line_lengths.append(length_from_start)
+
+                else:
+                    print("\tdistnace too far, min=%.3f" %(min_dist))
+                idx+=1
+            if len(line_lengths)!=2:
+                return
+            path = self.fd.get_edge_path(line_idxs[0],line_idxs[1])
+            if path:
+                path_point=path.copy()
+                path_point.insert(1,'A')
+                path_point.insert(len(path_point)-1,'B')
+                print("path sequence:%s" %(path_point))
+                print("edges :%s" %(self.fd.path_get_edge(path)))
+
+                river_length = self.fd.path_length(path_point[2:-2]) +  line_lengths[0] + line_lengths[1]
+                print("river length between A(%s),B(%s): %f" %(xy1_str,xy2_str,river_length))
+            else:
+                print("A(%s)->B(%s) don't have path!" %(xy1_str,xy2_str))
+        if id =="nx_write_shp":
+            self.fd.nx_write_shp()
+
     def do_desc(self,line):
         """desc Cx"""
         if not self.df is None:
@@ -654,6 +744,42 @@ ex: output stream
             print("stream(%i):" %(self.sto))
             self.fd.desc_stream({'seg_info':1,'link_info':0,'dot_info':0})
 
+    def do_nx_desc(self,line):
+        """desc network: nodes, edges and dot format
+nx_desc
+ex: nx_desc
+        """
+
+        self.fd.nx_desc()
+
+    def do_nx_info(self,line):
+        """query network information
+nx_info 2node node_a node_b
+ex: nx_info 2node S0 E18
+        """
+        if self.fd is None:
+            return
+        id="2node"
+        pars=line.split()
+        if len(pars)>=1:
+            id = pars[0]
+        if len(pars)==3:
+            start = pars[1]
+            end = pars[2]
+        else:
+            return
+        if id=="2node":
+            #path, path length
+            path1 = self.fd.get_path(start,end)
+            print("path %s->%s:%s" %(start,end,path1))
+            print("edges %s->%s:%s" %(start,end,self.fd.path_get_edge(path1)))
+
+            print("length information:")
+            print("total length=%f" %(self.fd.path_length(path1)))
+            kind = self.fd.nx_node_seq(start,end)
+            print("kind %s->%s:%i (1: 順向 -1:逆向 0:沒在一條線)" %(start,end,kind))
+        #direction
+        pass
     def do_quit(self, line):
         """quit this sub command"""
         """quit"""

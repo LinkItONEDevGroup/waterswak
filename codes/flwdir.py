@@ -1,11 +1,12 @@
 # @file flwdir.py
-# @brief pack pyflwdir to FlwDir()
+# @brief pack pyflwdir to FlwDir() and integrated networkx supported
 # @author wuulong@gmail.com
 #extend
 import rasterio
 from rasterio import features
 import pyflwdir
 import geopandas as gpd
+import json
 
 #畫圖要用的函示
 import matplotlib
@@ -19,13 +20,17 @@ from shapely import wkt
 from shapely.ops import split
 from shapely.geometry import *
 from shapely.ops import nearest_points
-
+import networkx as nx
 
 np.random.seed(seed=101)
 matplotlib.rcParams['savefig.bbox'] = 'tight'
 matplotlib.rcParams['savefig.dpi'] = 256
 plt.style.use('seaborn-whitegrid')
 
+def to_crs(xy,from_srid,to_srid): #[121.1359083, 24.74512778], 4326, 3826
+    s_from = gpd.GeoSeries([Point(121.1359083, 24.74512778)], crs=from_srid)
+    s_to = s_from.to_crs(to_srid)
+    return [s_to.iloc[0].x,s_to.iloc[0].y]
 
 
 class FlwDir():
@@ -45,6 +50,8 @@ class FlwDir():
 
         self.gdf_paths = None # downstream path
         self.gdf_pnts =  None # downstream point
+
+        self.G = None # stream networkx
 
     def reload(self,dtm_file='data/catchment/C1300_20m_elv0.tif',flwdir_file='data/catchment/C1300_20m_LDD.tif'):
 
@@ -117,6 +124,7 @@ class FlwDir():
 
             self.gdf.to_file(filename, driver='GeoJSON',index=True)
             print("stream saved filename=%s" %(filename))
+        self.G = self.stream_gen_networkx()
 
     def subbasins_streamorder(self,min_sto, filename=None):# None: return json, '' use default filename
         # calculate subbasins with a minimum stream order 7
@@ -235,6 +243,7 @@ class FlwDir():
             if cfg_dict['dot_info']==1:
                 print("N%i->N%i" %(l,link[l]))
         return [coords,link]
+    ##### networkx support ###################
     def join_line(self,wkt_str):
         #圳路接入主流
         # line_ori:要修改的線, line_need:想加入的線, line_append:更新起點的想加入線, line_split:要修改的線被匯流點切開的結果
@@ -300,4 +309,140 @@ class FlwDir():
             xy=pt_in.coords[0]
 
             return [idx_min,dist_min,xy[0],xy[1]] #index, distance, point_x, point_y
+
+    def stream_gen_networkx(self,shp=0): #shp(1): point for shp, shp(0): id base
+
+        #import matplotlib.pyplot as plt
+        #fd.streams(9,'')
+        G = nx.DiGraph()
+        nodes = {}
+        for index, row in self.gdf.iterrows():
+            line = row['geometry']
+            points = list(line.coords)
+            start = points[0]
+            end = points[len(points)-1]
+            line_len = line.length
+            seg_cnt = len(line.coords)
+
+
+            if not start in nodes.keys():
+
+                wkt = "POINT (%s %s)" %(start[0],start[1])
+                sname = "S%s" %(index)
+                nodes[start]=sname
+                if shp==1:
+                    G.add_node(start,name=sname,Wkt=wkt)
+                else:
+                    G.add_node(sname,name=sname,Wkt=wkt)
+            else:
+                sname = nodes[start]
+            if not end in nodes.keys():
+
+                wkt = "POINT (%s %s)" %(end[0],end[1])
+                ename = "E%s" %(index)
+                nodes[end]=ename
+                if shp==1:
+                    G.add_node(end,name=ename,Wkt=wkt)
+                else:
+                    G.add_node(ename,name=ename,Wkt=wkt)
+            else:
+                ename = nodes[end]
+
+            if shp==1:
+                G.add_weighted_edges_from([(start, end,line_len)],edge_id=index,edge_name=index,length=line_len)
+            else:
+                G.add_weighted_edges_from([(sname, ename,line_len)],edge_id=index,edge_name=index,length=line_len,line=line)
+
+        return G
+
+    def nx_write_shp(self):
+        G= self.stream_gen_networkx(1)
+        pathname="output/stream"
+        nx.write_shp(G,pathname)
+        if self.crs.to_epsg() == 3826:
+            prj="""PROJCS["TWD_1997_TM_Taiwan",GEOGCS["GCS_TWD_1997",DATUM["D_TWD_1997",SPHEROID["GRS_1980",6378137.0,298.257222101]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]],PROJECTION["Transverse_Mercator"],PARAMETER["False_Easting",250000.0],PARAMETER["False_Northing",0.0],PARAMETER["Central_Meridian",121.0],PARAMETER["Scale_Factor",0.9999],PARAMETER["Latitude_Of_Origin",0.0],UNIT["Meter",1.0]]"""
+            with open("%s/nodes.prj" %(pathname),'w') as f:
+                f.write(prj)
+            with open("%s/edges.prj" %(pathname),"w") as f:
+                f.write(prj)
+        self.G = self.stream_gen_networkx()
+        print("network shp saved:%s" %(pathname))
+    def get_path(self,start,end):
+        path = dict(nx.all_pairs_shortest_path(self.G))
+        if end in path[start].keys():
+            return path[start][end]
+        else:
+            return None
+    def path_get_edge(self,path):
+        edge_ids=[]
+        for i in range(1,len(path)):
+            start = path[i-1]
+            end = path[i]
+            edge_ids.append(self.G.edges[start,end]['edge_id'])
+        return edge_ids
+    def path_length(self,path):
+        len_total=0
+        if path:
+            for i in range(1,len(path)):
+                start = path[i-1]
+                end = path[i]
+                length=self.G.edges[start, end]['length']
+                edge_id = self.G.edges[start, end]['edge_id']
+                print("L%i(%s->%s):%f" %(edge_id,start,end,length))
+                len_total+=length
+        return len_total
+    def point_distance_in_line(self,line_idx, xy): #point:[x,y]
+        #get point distance from start of line index, return [line_length, length_from_start]
+        point = Point(xy[0], xy[1])
+        line = self.gdf.loc[line_idx]['geometry']
+        return [line.length, line.project(point)]
+    def get_edge_path(self,start_idx,end_idx):
+        #get node path from 2 edge
+        edges = dict(self.G.edges)
+        #print(edges)
+        for key in edges.keys():
+            if edges[key]['edge_id']==start_idx:
+                #print("key=%s,edge=%s" %(key,edges[key]))
+                start = key[0]
+            if edges[key]['edge_id']==end_idx:
+                end = key[1]
+        path = self.get_path(start,end)
+        return path
+    def nx_node_seq(self,start,end):
+        path_f = self.get_path(start,end)
+        path_r = self.get_path(end,start)
+        kind=0
+        if path_f:
+            kind=1
+        else:
+            if path_r:
+                kind=-1
+        #print("kind %s->%s:%i (1: 順向 -1:逆向 0:沒在一條線)" %(start,end,kind))
+        return kind
+    def nx_desc(self,desc_id=0):
+        if self.G is None:
+            return
+        if 1: #nodes
+            nodes = self.G.nodes
+            node_desc =",".join(list(nodes))
+            print( "nodes=%s" %(node_desc) )
+        if 1: #edges
+            edges = dict(self.G.edges)
+            print("===== edges =====")
+            for key in edges.keys():
+                print("%s->%s" %(key,edges[key]))
+
+        if 1: #detail
+            print("===== all detail  =====")
+            data_out = nx.node_link_data(self.G)
+            #print(json.dumps(json_out))
+            print(data_out)
+
+        if 1: #dump dot format
+            print("===== dot format =====")
+            edges = nx.edges(self.G)
+            print("digraph G {")
+            for e in edges:
+                print("\t%s->%s [label=\"%s\"]" %(e[0],e[1],self.G.edges[e[0], e[1]]['edge_id']))
+            print("}")
 

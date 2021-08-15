@@ -10,7 +10,7 @@
   },
   {
     "basin_id": "1290",
-    "basin_name": "範例",
+    "basin_name": "鳳山溪",
     "geo": "data/basin-河川流域範圍圖/basin-河川流域範圍圖.shp",
     "dtm": "data/catchment/C1290_20m_elv0.tif",
     "ldd": "data/catchment/C1290_20m_ldd.tif",

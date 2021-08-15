@@ -280,4 +280,3 @@ def sqldf(df,sql,filename=''):
         return m1_df
     except:
         print("EXCEPTION: sql=%s" %(sql))
-
