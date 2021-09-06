@@ -1,6 +1,8 @@
 # Byte-compiled / optimized / DLL files
 .idea/
 maintain_local.ipynb
+routine_job2.py
+test2.py
 __pycache__/
 *.py[cod]
 *$py.class

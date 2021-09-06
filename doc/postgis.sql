@@ -1125,9 +1125,25 @@ select ST_AsEWKT(ST_Transform('SRID=3826;POINT(268552 2733033)'::geometry, 4326)
 \copy ( select * from rivercode) To 'output/rivercode.csv' With CSV HEADER
 
 -- 地理欄位都叫做 geom
-select * from geometry_columns where f_table_name='e_river_station';
-select * from geometry_columns where not f_geometry_column='geom'
+select * from geometry_columns where f_table_name='county_moi';
+select * from geometry_columns where not f_geometry_column='sim_geom'
 
+with t1 as (
+    SELECT ST_Npoints(geom) AS ori,
+           ST_Npoints(sim_geom) AS sim,
+           ST_NPoints(ST_Simplify(geom,0.0001,True)) AS ori_sim,countyname
+    from county_moi
+)
+select avg(ori),avg(sim),avg(ori_sim) from t1;
+
+SELECT UpdateGeometrySRID('village_moi_121','geom',3826);
+SELECT UpdateGeometrySRID('town_moi','geom',3824);
+SELECT UpdateGeometrySRID('county_moi','geom',3824);
+UPDATE village_moi_121 SET sim_geom = ST_Simplify(geom,15,True);
+UPDATE town_moi SET sim_geom = ST_Simplify(geom,0.0001,True);
+UPDATE county_moi SET sim_geom = ST_Simplify(geom,0.0001,True);
+
+town_moi,county_moi,village_moi_121
 -- column rename
 ALTER TABLE village_moi_121 RENAME COLUMN bbox TO sim_geom;
 

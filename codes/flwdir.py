@@ -6,6 +6,7 @@ import rasterio
 from rasterio import features
 import pyflwdir
 import geopandas as gpd
+import pandas as pd
 import json
 
 #畫圖要用的函示
@@ -19,7 +20,7 @@ import numpy as np
 from shapely import wkt
 from shapely.ops import split
 from shapely.geometry import *
-from shapely.ops import nearest_points
+from shapely.ops import nearest_points,substring
 import networkx as nx
 
 np.random.seed(seed=101)
@@ -35,7 +36,8 @@ def to_crs(xy,from_srid,to_srid): #[121.1359083, 24.74512778], 4326, 3826
 
 class FlwDir():
     def __init__(self):
-
+        self.rio1 = None
+        self.rio2 = None
         self.flwdir = None #
         self.transform = None #
         self.crs = None #
@@ -54,18 +56,20 @@ class FlwDir():
         self.G = None # stream networkx
 
     def reload(self,dtm_file='data/catchment/C1300_20m_elv0.tif',flwdir_file='data/catchment/C1300_20m_LDD.tif'):
-
-        with rasterio.open(flwdir_file, 'r') as src1:
-            self.flwdir = src1.read(1)
-            self.transform = src1.transform
-            self.crs = src1.crs
-            self.latlon = self.crs.to_epsg() == 4326
-            print("%s info:%s" %(flwdir_file,src1))
-        with rasterio.open(dtm_file, 'r') as src2:
-            self.elevtn = src2.read(1)
+        with rasterio.open(dtm_file, 'r') as src1:
+            self.elevtn = src1.read(1)
             self.elevtn[self.elevtn==-99999]=-9999
-            self.prof = src2.profile
-            print("%s info:%s" %(dtm_file,src2))
+            self.prof = src1.profile
+            self.rio1 = src1
+            print("%s info:%s" %(dtm_file,src1))
+
+        with rasterio.open(flwdir_file, 'r') as src2:
+            self.flwdir = src2.read(1)
+            self.transform = src2.transform
+            self.crs = src2.crs
+            self.latlon = self.crs.to_epsg() == 4326
+            self.rio2=src2
+            print("%s info:%s" %(flwdir_file,src2))
     def init(self):
         ftype='ldd'
         self.flw = pyflwdir.from_array(self.flwdir,ftype=ftype, transform=self.transform, latlon=self.latlon, cache=True) #d8
@@ -142,11 +146,14 @@ class FlwDir():
     def path(self,points,filename=None): # None: return json, '' use default filename
         # 算通過點的下游路線
         # flow paths return the list of linear indices
+        # points=[[260993,2735861,'油羅上坪匯流'],[253520,2743364,'隆恩堰'],[247785,2746443,'湳雅取水口']]
         x=[]
         y=[]
+        names=[]
         for p in points:
             x.append(p[0])
             y.append(p[1])
+            names.append(p[2])
         xy = (x,y)
         #points=[[260993,2735861,'油羅上坪匯流'],[253520,2743364,'隆恩堰'],[247785,2746443,'湳雅取水口']]
         #xy=([260993, 253520, 247785], [2735861, 2743364, 2746443])
@@ -158,6 +165,20 @@ class FlwDir():
         feats = self.flw.geofeatures(flowpaths)
         self.gdf_paths = gpd.GeoDataFrame.from_features(feats, crs=self.crs).reset_index()
         self.gdf_pnts = gpd.GeoDataFrame(geometry=gpd.points_from_xy(*xy)).reset_index()
+
+        name_dict = {}
+        for index, row in self.gdf_paths.iterrows():
+            name = points[row['index']][2]
+            name_dict[name] = row['index']
+        self.gdf_paths['name']=name_dict
+
+#def patch_name(row):
+        #    global points
+        #    #print(name)
+        #    return points[row['index']][2]
+        #self.gdf_paths['name']=self.gdf_paths.apply(patch_name,axis=1)
+
+
         if filename is None:
             return self.gdf_paths.to_json()
         else:
@@ -391,6 +412,70 @@ class FlwDir():
                 print("L%i(%s->%s):%f" %(edge_id,start,end,length))
                 len_total+=length
         return len_total
+    def pathline_interpolate(self,line_geo,parts=10,filename_csv='output/pathline_height.csv', filename_shp="output/pathline_slope.shp"):
+        #if self.gdf_paths is None:
+        #    return None
+        #self.gdf_paths['group']=1
+        #gdf = self.gdf_paths.dissolve(by='group')
+        #parts=10
+        slope_max =100000
+        csv={'index':[], 'pos':[],'x':[],'y':[],'height':[]}
+        line = line_geo
+        #for index, row in gdf.iterrows():
+        #line = row['geometry']
+        print("line interpolate with %i part:\nindex,pos,x,y,height" %(parts))
+        feats=[]
+        for i in range(parts+1):
+            interp = float(i)/parts
+            point = line.interpolate(interp,normalized=True)
+            row,col =self.rio1.index(point.x,point.y)
+            height = self.elevtn[row,col]
+            print("%i,%.3f,%.3f,%.3f,%.3f" %(i,interp*line.length, point.x,point.y,height))
+            csv['index'].append(i)
+            csv['pos'].append(interp*line.length)
+            csv['x'].append(point.x)
+            csv['y'].append(point.y)
+            csv['height'].append(height)
+            #print("%s height:%.2f" %(point[2],data[row,col]))
+            if i>0:
+                e = float(i)/parts
+                s = float((i-1))/parts
+                #print("s=%s,e=%s" %(s,e))
+                line1 = substring(line,s , e,normalized=True)
+                points = list(line1.coords)
+                if height_prev != height:
+                    slope = line.length / (height_prev - height)
+                    avg_height = (height_prev + height) / 2
+                else:
+                    slope = slope_max
+                    avg_height= height
+                props = {}
+                feats.append(
+                    {
+                        "type": "Feature",
+                        "properties": {"index": i,"slope":slope, "avg_height":avg_height ,  **props},
+                        "geometry": {
+                            "type": "LineString",
+                            "coordinates": [(p[0], p[1]) for p in points],
+                        },
+
+                    }
+                )
+            point_prev = point
+            height_prev = height
+
+        df = pd.DataFrame.from_dict(csv)
+        print("pathline_interpolate saved: %s" %(filename_csv))
+        df.to_csv(filename_csv,index=False)
+
+
+        #gdf
+        gdf_lines = gpd.GeoDataFrame.from_features(feats, self.crs)
+        dict_par={'encoding':'utf-8'}
+        gdf_lines.to_file(filename_shp,**dict_par)
+        print("pathline slope saved: %s" %(filename_shp))
+
+        return gdf_lines
     def point_distance_in_line(self,line_idx, xy): #point:[x,y]
         #get point distance from start of line index, return [line_length, length_from_start]
         point = Point(xy[0], xy[1])
@@ -445,4 +530,13 @@ class FlwDir():
             for e in edges:
                 print("\t%s->%s [label=\"%s\"]" %(e[0],e[1],self.G.edges[e[0], e[1]]['edge_id']))
             print("}")
+    def rio_value(self,point,rio_id=1): #get dtm height point=[x,y]
+        if rio_id==1:
+            rio=self.rio1
+            data=self.elevtn
+        else:
+            rio=self.rio2
+            data=self.flwdir
+        row,col =rio.index(point[0],point[1])
+        return data[row,col]
 

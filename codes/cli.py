@@ -605,17 +605,15 @@ output [type] [...]
         point_catchment_csv csv_filename : -need csv filename input or x,y for single point
         point_catchment x,y : - x,y for single point
         path x,y [x,y] [...] : generate downstream path
-        point_near x,y [min_distance] :  get stream nearest information by point, line_index, distance, point_x, point_y
-        2point x1,y1 x2,y2 [min_distance] : desc 2point path, path length, river length
+        pathline_interpolate [parts] [filename_csv] [filename_shp] : generate interpolate points from path, also output slope shape
         nx_write_shp : output network to shp
 ex: output stream
     output subbas
     output point_catchment_csv "data/喝好水 吃好物 有良居-公民協力 - 點位集水區.csv"
     output point_catchment 253520,2743364
     output path 253520,2743364
-    output point_near 253520,2743364 5000
-    output 2point 262572,2736940 247346,2747132 5000
     output nx_write_shp
+    output pathline_interpolate 10
         """
         id = "stream"
         #filename = "data/喝好水 吃好物 有良居-公民協力 - 點位集水區.csv"
@@ -678,15 +676,93 @@ ex: output stream
                 self.fd.path(points,'')
             else:
                 print("point data invalid!")
+        if id =="nx_write_shp":
+            self.fd.nx_write_shp()
+        if id=="pathline_interpolate":
+            parts=10
+            gdf = None
+            filename_csv = "output/pathline_height.csv"
+            filename_shp = "output/pathline_slope.shp"
+            if len(pars)>=2:
+                parts = int(pars[1])
+            if len(pars)>=3:
+                filename_csv = pars[2]
+            if len(pars)>=4:
+                filename_shp = pars[3]
+            if self.fd.gdf_paths is None:
+                print("pathline need init! run output path first")
+                return
+            for index, row in self.fd.gdf_paths.iterrows():
+                line_geo = row['geometry']
+                gdf = self.fd.pathline_interpolate(line_geo,parts,filename_csv=filename_csv,filename_shp=filename_shp)
+            if gdf is None:
+                print("pathline need init! run output path first")
+
+    def do_desc(self,line):
+        """desc Cx"""
+        if not self.df is None:
+            print("basin_id=%s information:\n%s" %(self.basin_id,self.df))
+            print("stream(%i):" %(self.sto))
+            self.fd.desc_stream({'seg_info':1,'link_info':0,'dot_info':0})
+        #desc network: nodes, edges and dot format
+        self.fd.nx_desc()
+
+
+    def do_info(self,line):
+        """query information
+info point_height x,y
+     2node node_a node_b
+     point_near x,y [min_distance] :  get stream nearest information by point, line_index, distance, point_x, point_y
+     2point x1,y1 x2,y2 [min_distance] : desc 2point path, path length, river length
+
+ex: info point_height 274202,2731387
+    info 2node S0 E18
+    info point_near 253520,2743364 5000
+    info 2point 262572,2736940 247346,2747132 5000
+        """
+        if self.fd is None:
+            return
+        id="2node"
+        pars=line.split()
+        if len(pars)>=1:
+            id = pars[0]
+
+        if id=="2node":
+            if len(pars)==3:
+                start = pars[1]
+                end = pars[2]
+            else:
+                return
+            #path, path length
+            path1 = self.fd.get_path(start,end)
+            print("path %s->%s:%s" %(start,end,path1))
+            print("edges %s->%s:%s" %(start,end,self.fd.path_get_edge(path1)))
+
+            print("length information:")
+            print("total length=%f" %(self.fd.path_length(path1)))
+            kind = self.fd.nx_node_seq(start,end)
+            print("kind %s->%s:%i (1: 順向 -1:逆向 0:沒在一條線)" %(start,end,kind))
+        if id=="point_height":
+            if len(pars)>=2:
+                xy_str=pars[1]
+            else:
+                return
+            xy = xy_str.split(",")
+            height_src=self.fd.rio_value([float(xy[0]),float(xy[1])])
+            print("src_x=%.3f,src_y=%.3f,height=%.3f" %(float(xy[0]),float(xy[1]),height_src))
+
         if id=="point_near":
             min_dist=5000
             xy_str=pars[1]
             if len(pars)>=3:
                 min_dist = float(pars[2])
             xy = xy_str.split(",")
+            height_src=self.fd.rio_value([float(xy[0]),float(xy[1])])
+            print("src_x=%.3f,src_y=%.3f,height=%.3f" %(float(xy[0]),float(xy[1]),height_src))
             res = self.fd.point_with_streams([float(xy[0]),float(xy[1])],min_dist)
             if res:
-                print("line_index=%i, distance=%.3f, point_x=%.3f, point_y=%.3f" %(res[0],res[1],res[2],res[3]))
+                height=self.fd.rio_value([res[2],res[3]])
+                print("line_index=%i, distance=%.3f, point_x=%.3f, point_y=%.3f,height=%.3f" %(res[0],res[1],res[2],res[3],height))
             else:
                 print("distnace too far, min=%.3f" %(min_dist))
         if id=="2point":
@@ -734,52 +810,10 @@ ex: output stream
                 print("river length between A(%s),B(%s): %f" %(xy1_str,xy2_str,river_length))
             else:
                 print("A(%s)->B(%s) don't have path!" %(xy1_str,xy2_str))
-        if id =="nx_write_shp":
-            self.fd.nx_write_shp()
 
-    def do_desc(self,line):
-        """desc Cx"""
-        if not self.df is None:
-            print("basin_id=%s information:\n%s" %(self.basin_id,self.df))
-            print("stream(%i):" %(self.sto))
-            self.fd.desc_stream({'seg_info':1,'link_info':0,'dot_info':0})
-
-    def do_nx_desc(self,line):
-        """desc network: nodes, edges and dot format
-nx_desc
-ex: nx_desc
-        """
-
-        self.fd.nx_desc()
-
-    def do_nx_info(self,line):
-        """query network information
-nx_info 2node node_a node_b
-ex: nx_info 2node S0 E18
-        """
-        if self.fd is None:
-            return
-        id="2node"
-        pars=line.split()
-        if len(pars)>=1:
-            id = pars[0]
-        if len(pars)==3:
-            start = pars[1]
-            end = pars[2]
-        else:
-            return
-        if id=="2node":
-            #path, path length
-            path1 = self.fd.get_path(start,end)
-            print("path %s->%s:%s" %(start,end,path1))
-            print("edges %s->%s:%s" %(start,end,self.fd.path_get_edge(path1)))
-
-            print("length information:")
-            print("total length=%f" %(self.fd.path_length(path1)))
-            kind = self.fd.nx_node_seq(start,end)
-            print("kind %s->%s:%i (1: 順向 -1:逆向 0:沒在一條線)" %(start,end,kind))
         #direction
         pass
+
     def do_quit(self, line):
         """quit this sub command"""
         """quit"""
