@@ -23,4 +23,5 @@ dependencies:
   - libcurl=7.77.0
   - jupyter
   - owslib
+  - netcdf4
 prefix: 
