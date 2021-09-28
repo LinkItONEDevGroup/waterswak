@@ -302,11 +302,15 @@ ex: to_crs 121.1359083 24.74512778 4326 3826
         return True
     def do_get_flow(self,line):
         """get flow data
-get_flow flow_id time_x_y t,x,y
 get_flow flow_id desc
-ex: get_flow 202107251400 time_x_y 27114180 120.9339 24.4961
-    get_flow 202107251400 desc
-    get_flow 202107251400 desc
+get_flow flow_id time_x_y t,x,y
+get_flow flow_id his_x_y x,y
+get_flow flow_id max_offset x,y,o
+
+ex: get_flow 202107251400 desc
+    get_flow 202107251400 time_x_y 27114180 120.9339 24.4961
+    get_flow 202107251400 his_x_y 120.9339 24.4961
+    get_flow 202107251400 max_offset 120.9339 24.4961 10
         """
         pars=line.split()
         if len(pars)>=2:
@@ -330,15 +334,76 @@ ex: get_flow 202107251400 time_x_y 27114180 120.9339 24.4961
             return
         wf=wflow.WFlow(nc_file)
         if tid=="desc":
-            wf.desc()
+            ret=wf.desc()
+            return "\n".join(ret)
         if tid=="time_x_y":
             if len(pars)==5:
                 t = float(pars[2])
                 x = float(pars[3])
                 y = float(pars[4])
-                wf.get_flow(tid,[t,x,y],True)
+                ret=wf.get_flow(tid,[t,x,y],True)
+                return ret
             else:
                 print("parameters count should = 5")
+        if tid=="his_x_y":
+            if len(pars)==4:
+                x = float(pars[2])
+                y = float(pars[3])
+                ret=wf.get_flow(tid,[x,y],True)
+                return ret
+            else:
+                print("parameters count should = 4")
+        if tid=="max_offset":
+            if len(pars)==5:
+                x = float(pars[2])
+                y = float(pars[3])
+                o = int(pars[4])
+                ret=wf.get_flow(tid,[x,y,o],True)
+                return ret
+            else:
+                print("parameters count should = 5")
+    def do_csv_get_flow(self,line):
+        """get flow data from CSV data
+csv_get_flow csv_path => result saved output/flow_query_result.csv
+ex: csv_get_flow data/flow_query.csv
+        """
+        pars=line.split()
+        if len(pars)>=1:
+            csv_path = pars[0]
+        else:
+            print("parameters count should >=1")
+            return
+        if os.path.isfile(csv_path):
+            pass
+        else:
+            print("%s not exist!" %(csv_path))
+        df= pd.read_csv(csv_path)
+        for index,row in df.iterrows():
+            tid=row['tid']
+            line=""
+            if tid=='time_x_y':
+                line = "%s %s %s %s %s" %(row['flow_id'],row['tid'],row['t'],row['x'],row['y'])
+                ret = self.do_get_flow(line)
+                #print("get ret=%s" %(ret))
+                df.loc[index, 'flow']=ret
+            if tid=='his_x_y':
+                line = "%s %s %s %s" %(row['flow_id'],row['tid'],row['x'],row['y'])
+                ret = self.do_get_flow(line)
+                #print("get ret=%s" %(ret))
+                df.loc[index, 'result']=str(ret)
+            if tid=='max_offset':
+                line = "%s %s %s %s %i" %(row['flow_id'],row['tid'],row['x'],row['y'],row['o'])
+                ret = self.do_get_flow(line)
+                #print("get ret=%s" %(ret))
+                df.loc[index, 'flow']=ret
+            if tid=='desc':
+                line = "%s %s" %(row['flow_id'],row['tid'])
+                ret = self.do_get_flow(line)
+                #print("get ret=%s" %(ret))
+                df.loc[index, 'desc']=str(ret)
+        csv_result="output/flow_query_result.csv"
+        df.to_csv(csv_result)
+        print("%s output!" %(csv_result))
 ############ base class ####################
 class CliTblBase(cmd.Cmd):
     #domain_set=['cli_basin','data/basin-河川流域範圍圖/basin-河川流域範圍圖.shp','NOGEOM',1]

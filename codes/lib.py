@@ -1,11 +1,14 @@
 # @file lib.py
 # @brief misc library
 # @author wuulong@gmail.com
+
+import re
 import pandas as pd
-from codes.db import *
-from codes.riverlog import *
 import pandasql as ps
 from pandas.api.types import is_numeric_dtype
+
+from codes.db import *
+from codes.riverlog import *
 
 sql_keys={
     "rain_station":"select * from r_rain_station order by \"stationID\"",
@@ -280,3 +283,4 @@ def sqldf(df,sql,filename=''):
         return m1_df
     except:
         print("EXCEPTION: sql=%s" %(sql))
+

@@ -90,7 +90,7 @@ union
 select '磁環分層式地層下陷監測井' as type,name as id, name, geom from subasta
 ;
 
-select * from sensor_station;
+select * from sensor_station where type='河川流量測站';
 
 -- 匯出 sensor_station 到 shp
 pgsql2shp -f output/sensor_station.shp -h localhost -p 5431 -u postgres -g geom postgis "select * from sensor_station;"
@@ -1160,3 +1160,46 @@ select sitename,twd97lon,twd97lat,twd97tm2x,twd97tm2y,ST_AsEWKT(ST_Transform(geo
 -- srid transfer
 SELECT ST_AsEWKT('SRID=3826;POINT(268454 2733084)'::geometry);
 
+-- date format
+select to_date("CKDATE",'YYY.MM.DD')- interval '89 year' from hackathon.e_waterwork_q limit 1;
+
+BEGIN;
+update hackathon.e_waterwork_q set "CKDATE" = to_date("CKDATE",'YYY.MM.DD')- interval '89 year'
+ROLLBACK;
+COMMIT;
+
+-- 污水處理廠 ID 不好對應
+select "工業區名稱" from "8818-工業區污水處理廠分布位置圖" limit 1;
+select "廠名" from "22371-工業區污水處理廠放流水水質資訊" limit 1;
+select fname from "25598-台灣各工業區範圍圖資料集" limit 1;
+select "工業區代碼","污水處理廠名稱" from "95103-工業局所轄污水處理廠基本資料" limit 1;
+
+select "所在工業區" from "8818-工業區污水處理廠分布位置圖" where "工業區名稱" like '%新竹%';
+select fname from "25598-台灣各工業區範圍圖資料集" where "fname" like '%新竹%';
+select "工業區代碼" from "95103-工業局所轄污水處理廠基本資料" where "工業區代碼" like '%新竹%';
+
+select * from "m_6569-登記工廠名錄" limit 1
+
+-- EPA API: /ems_s_03 水污染源許可及申報資料 e_waterp_record
+ALTER TABLE e_waterp_record SET SCHEMA hackathon;
+select * from hackathon.e_waterp_record limit 10;
+select distinct "EMI_ITEM" from hackathon.e_waterp_record;
+
+
+
+\copy ( select distinct * from hackathon.e_waterp_record where "EMI_SDATE">='2021-01-01' and "EMI_ITEM"='氨氮') To 'output/test1.csv' With CSV HEADER
+
+\copy ( select distinct * from hackathon.e_waterp_record where  "FAC_NAME"='台星科股份有限公司') To 'output/test2.csv' With CSV HEADER
+
+
+select 'SRID=4326;POINT("LET_EAST" "LET_NORTH")'::geometry from hackathon.e_waterp_record limit 10;
+
+SET search_path TO "$user",hackathon,public;
+SELECT AddGeometryColumn('e_waterp_record','geom','4326','POINT','2');
+UPDATE hackathon.e_waterp_record SET geom = ST_SetSRID(ST_MakePoint(CAST ("LET_EAST" AS float),CAST ("LET_NORTH" AS float)), 4326);
+CREATE INDEX e_waterp_record_geom_idx ON hackathon.e_waterp_record USING gist (geom)
+
+CAST ("LET_EAST" AS DOUBLE PRECISION),CAST ("LET_NORTH" AS DOUBLE PRECISION)
+
+--
+select name,ST_AsEWKT(ST_Transform(geom, 4326)) as wkt_4326 from sensor_station where type='河川流量測站';

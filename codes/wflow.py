@@ -77,7 +77,7 @@ class WFlow():
     def get_flow(self,tid, par, b_print=True): # get flow by type
         """get flow by type
         tid : string, par=[] , b_print: need print
-        time_x_y : [t,x,y ]  ex: [27114180, 120.9339,24.4961] , return float
+            time_x_y : [t,x,y ]  ex: [27114180, 120.9339,24.4961] , return float
         his_x_y : [x,y] ex: [120.9339,24.4961] , return [[]]  # 某個經緯度的歷史流量
         max_offset ; [x,y,o] ex: [120.9339,24.4961, 10] #offset_idx 實際範圍為 *2*20m, return float
         return value: different by tid
@@ -132,19 +132,26 @@ class WFlow():
             ret = self.get_flow(tid,par,b_print)
             rets.append(ret)
         return rets
-    def desc(self):
-        print("----- rootgrp -----\n%s" %(self.rootgrp))
-        print("----- flow_simulated -----\n%s" %(self.flow_simulated))
+    def desc(self,b_print=True):
+        lines=[]
+
+        lines.append("----- rootgrp -----\n%s" %(self.rootgrp))
+        lines.append("----- flow_simulated -----\n%s" %(self.flow_simulated))
         #print("----- time -----\n%s" %(self.time))
-        print("----- x -----\n%s" %(self.x))
-        print("----- y -----\n%s" %(self.y))
-        print("----- z -----\n%s" %(self.z))
+        lines.append("----- x -----\n%s" %(self.x))
+        lines.append("----- y -----\n%s" %(self.y))
+        lines.append("----- z -----\n%s" %(self.z))
         #print("----- time_d -----\n%s" %(self.time_d))
-        print("----- time info -----")
-        print("index,time,local_time")
+        lines.append("----- time info -----")
+        lines.append("index,time,local_time")
         for i in range(len(self.time)):
             local = nc_to_localtime(self.time_d[i])
             time_str=self.time[i]
             local_str=local.strftime("%Y%m%dT%H%M%S")
             line = "%i,%s,%s" %(i,time_str,local_str)
-            print(line)
+            lines.append(line)
+        if b_print:
+            for line in lines:
+                print(line)
+        return lines
+
