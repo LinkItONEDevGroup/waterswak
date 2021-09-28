@@ -9,6 +9,8 @@ import logging
 #import pandas as pd
 #import pandasql as ps
 import geopandas
+from shapely.geometry import *
+
 #library
 import codes.globalclasses as gc
 from codes.const import *
@@ -17,7 +19,8 @@ from codes.lib import *
 from codes.riverlog import *
 from codes.tools import *
 from codes.flwdir import *
-from shapely.geometry import *
+import codes.wflow as wflow
+
 
 
 DOMAIN_SET_LOAD_SKIP=0
@@ -297,7 +300,45 @@ ex: to_crs 121.1359083 24.74512778 4326 3826
         """quit this sub command"""
         """quit"""
         return True
+    def do_get_flow(self,line):
+        """get flow data
+get_flow flow_id time_x_y t,x,y
+get_flow flow_id desc
+ex: get_flow 202107251400 time_x_y 27114180 120.9339 24.4961
+    get_flow 202107251400 desc
+    get_flow 202107251400 desc
+        """
+        pars=line.split()
+        if len(pars)>=2:
+            flow_id = pars[0]
+            tid = pars[1]
+        else:
+            print("parameters count should >=2")
+            return
+        #load cx_dict
+        filename="include/flow_def.json"
+        data = load_json(filename)
+        flow_ids={}
+        self.cx_dicts = {}
+        for i in range(len(data)):
+            flow_ids[data[i]['flow_id']]=data[i]['nc_file']
 
+        if flow_id in flow_ids.keys():
+            nc_file=flow_ids[flow_id]
+        else:
+            print("flow_id list: %s" %(flow_ids.keys()))
+            return
+        wf=wflow.WFlow(nc_file)
+        if tid=="desc":
+            wf.desc()
+        if tid=="time_x_y":
+            if len(pars)==5:
+                t = float(pars[2])
+                x = float(pars[3])
+                y = float(pars[4])
+                wf.get_flow(tid,[t,x,y],True)
+            else:
+                print("parameters count should = 5")
 ############ base class ####################
 class CliTblBase(cmd.Cmd):
     #domain_set=['cli_basin','data/basin-河川流域範圍圖/basin-河川流域範圍圖.shp','NOGEOM',1]
