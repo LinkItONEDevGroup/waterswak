@@ -192,6 +192,7 @@ class CliTool(cmd.Cmd):
         else:
             cmd.Cmd.__init__(self)
         self.tdf = None # layer global dataframe
+        self.get_flow_ret = None
     def do_read_file(self,line):
         """using geopandas read_file to load geo data file -> tool layer global dataframe(tdf).
 (1)shp, gpkg, zip tested
@@ -303,15 +304,16 @@ ex: to_crs 121.1359083 24.74512778 4326 3826
     def do_get_flow(self,line):
         """get flow data
 get_flow flow_id desc
-get_flow flow_id time_x_y t,x,y
-get_flow flow_id his_x_y x,y
-get_flow flow_id max_offset x,y,o
+get_flow flow_id time_xy t x y o
+get_flow flow_id his_xy x y o
+get_flow flow_id max_offset x y o
 
 ex: get_flow 202107251400 desc
-    get_flow 202107251400 time_x_y 27114180 120.9339 24.4961
-    get_flow 202107251400 his_x_y 120.9339 24.4961
+    get_flow 202107251400 time_xy 27114180 120.9339 24.4961 10
+    get_flow 202107251400 his_xy 120.9339 24.4961 10
     get_flow 202107251400 max_offset 120.9339 24.4961 10
         """
+        self.get_flow_ret = ""
         pars=line.split()
         if len(pars)>=2:
             flow_id = pars[0]
@@ -319,11 +321,9 @@ ex: get_flow 202107251400 desc
         else:
             print("parameters count should >=2")
             return
-        #load cx_dict
         filename="include/flow_def.json"
         data = load_json(filename)
         flow_ids={}
-        self.cx_dicts = {}
         for i in range(len(data)):
             flow_ids[data[i]['flow_id']]=data[i]['nc_file']
 
@@ -335,31 +335,33 @@ ex: get_flow 202107251400 desc
         wf=wflow.WFlow(nc_file)
         if tid=="desc":
             ret=wf.desc()
-            return "\n".join(ret)
-        if tid=="time_x_y":
-            if len(pars)==5:
+            self.get_flow_ret = "\n".join(ret)
+        if tid=="time_xy":
+            if len(pars)==6:
                 t = float(pars[2])
                 x = float(pars[3])
                 y = float(pars[4])
-                ret=wf.get_flow(tid,[t,x,y],True)
-                return ret
+                o = int(pars[5])
+                ret=wf.get_flow(tid,[t,x,y,o],True)
+                self.get_flow_ret = ret
             else:
-                print("parameters count should = 5")
-        if tid=="his_x_y":
-            if len(pars)==4:
+                print("parameters count should = 6")
+        if tid=="his_xy":
+            if len(pars)==5:
                 x = float(pars[2])
                 y = float(pars[3])
-                ret=wf.get_flow(tid,[x,y],True)
-                return ret
+                o = int(pars[4])
+                ret=wf.get_flow(tid,[x,y,o],True)
+                self.get_flow_ret = ret
             else:
-                print("parameters count should = 4")
+                print("parameters count should = 5")
         if tid=="max_offset":
             if len(pars)==5:
                 x = float(pars[2])
                 y = float(pars[3])
                 o = int(pars[4])
                 ret=wf.get_flow(tid,[x,y,o],True)
-                return ret
+                self.get_flow_ret = ret
             else:
                 print("parameters count should = 5")
     def do_csv_get_flow(self,line):
@@ -381,16 +383,17 @@ ex: csv_get_flow data/flow_query.csv
         for index,row in df.iterrows():
             tid=row['tid']
             line=""
-            if tid=='time_x_y':
-                line = "%s %s %s %s %s" %(row['flow_id'],row['tid'],row['t'],row['x'],row['y'])
+            if tid=='time_xy':
+                line = "%s %s %s %s %s %i" %(row['flow_id'],row['tid'],row['t'],row['x'],row['y'],row['o'])
+                self.do_get_flow(line)
+
+                #print("get ret=%s" %(ret))
+                df.loc[index, 'flow']=self.get_flow_ret
+            if tid=='his_xy':
+                line = "%s %s %s %s %i" %(row['flow_id'],row['tid'],row['x'],row['y'],row['o'])
                 ret = self.do_get_flow(line)
                 #print("get ret=%s" %(ret))
-                df.loc[index, 'flow']=ret
-            if tid=='his_x_y':
-                line = "%s %s %s %s" %(row['flow_id'],row['tid'],row['x'],row['y'])
-                ret = self.do_get_flow(line)
-                #print("get ret=%s" %(ret))
-                df.loc[index, 'result']=str(ret)
+                df.loc[index, 'result']=str(self.get_flow_ret)
             if tid=='max_offset':
                 line = "%s %s %s %s %i" %(row['flow_id'],row['tid'],row['x'],row['y'],row['o'])
                 ret = self.do_get_flow(line)
@@ -400,10 +403,11 @@ ex: csv_get_flow data/flow_query.csv
                 line = "%s %s" %(row['flow_id'],row['tid'])
                 ret = self.do_get_flow(line)
                 #print("get ret=%s" %(ret))
-                df.loc[index, 'desc']=str(ret)
+                df.loc[index, 'desc']=str(self.get_flow_ret)
         csv_result="output/flow_query_result.csv"
         df.to_csv(csv_result)
         print("%s output!" %(csv_result))
+
 ############ base class ####################
 class CliTblBase(cmd.Cmd):
     #domain_set=['cli_basin','data/basin-河川流域範圍圖/basin-河川流域範圍圖.shp','NOGEOM',1]

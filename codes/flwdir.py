@@ -29,7 +29,7 @@ matplotlib.rcParams['savefig.dpi'] = 256
 plt.style.use('seaborn-whitegrid')
 
 def to_crs(xy,from_srid,to_srid): #[121.1359083, 24.74512778], 4326, 3826
-    s_from = gpd.GeoSeries([Point(121.1359083, 24.74512778)], crs=from_srid)
+    s_from = gpd.GeoSeries([Point(xy[0],xy[1])], crs=from_srid)
     s_to = s_from.to_crs(to_srid)
     return [s_to.iloc[0].x,s_to.iloc[0].y]
 

@@ -8,6 +8,8 @@ import datetime as dt
 import cftime
 from dateutil import tz
 
+from codes.lib import *
+
 def nc_to_localtime(d): #time_d
     utc=dt.datetime(d.year, d.month, d.day, d.hour, d.minute, d.second)
     from_zone = tz.tzutc()
@@ -63,6 +65,24 @@ def force_in(ary,idx):
     if idx>= len(ary):
         return len(ary)-1
     return idx
+# manager of all WFlow
+class WFlows():
+    def __init__(self):
+        filename="include/flow_def.json"
+        data = load_json(filename)
+        self.flow_ids={}
+        for i in range(len(data)):
+            self.flow_ids[data[i]['flow_id']]=data[i]
+        self.ncs = {} #store all loaded ncs by flow_id
+    def load(self,flow_id):
+        if flow_id in self.flow_ids.keys():
+            nc_file=self.flow_ids[flow_id]['nc_file']
+            self.ncs[flow_id]=WFlow(nc_file)
+            #self.wf.desc()
+    def desc(self):
+        for flow_id in self.flow_ids.keys():
+            print(self.flow_ids[flow_id])
+#single wflow
 class WFlow():
     def __init__(self,nc_file):
         #nc_file="/Users/wuulong/MakerBk2/QGIS/projects/Test_316/202107251400.nc"
@@ -77,32 +97,45 @@ class WFlow():
     def get_flow(self,tid, par, b_print=True): # get flow by type
         """get flow by type
         tid : string, par=[] , b_print: need print
-            time_x_y : [t,x,y ]  ex: [27114180, 120.9339,24.4961] , return float
-        his_x_y : [x,y] ex: [120.9339,24.4961] , return [[]]  # 某個經緯度的歷史流量
+        time_xy : [t,x,y,o ]  ex: [27114180, 120.9339,24.4961, 10] , return float
+        his_xy : [x,y,o] ex: [120.9339,24.4961,10] , return [[]]  # 某個經緯度的歷史流量
         max_offset ; [x,y,o] ex: [120.9339,24.4961, 10] #offset_idx 實際範圍為 *2*20m, return float
         return value: different by tid
         """
-        if tid=="time_x_y":
+        if tid=="time_xy":
             t = par[0]
             x = par[1]
             y = par[2]
+            o = par[3]
             time_idx=np.searchsorted(self.time, t)
             y_idx=np.searchsorted(self.y, y)
             x_idx=np.searchsorted(self.x, x)
-            ret = self.flow_simulated[time_idx][y_idx][x_idx]
+            if o==0:
+                ret = self.flow_simulated[time_idx][y_idx][x_idx]
+            else:
+                area = self.flow_simulated[time_idx,force_in(self.y,y_idx-o):force_in(self.y,y_idx+o),force_in(self.x,x_idx-o):force_in(self.x,x_idx+o)]
+                ret=np.max(area)
+
             if b_print:
                 print(ret)
             return ret
-        if tid=="his_x_y":
+        if tid=="his_xy":
             x = par[0]
             y = par[1]
+            o = par[2]
             y_idx=np.searchsorted(self.y,y )
             x_idx=np.searchsorted(self.x,x )
             lines = []
             if b_print:
                 print("time_str,y,x,flow")
             for i in range(len(self.time)):
-                flow = self.flow_simulated[i][y_idx][x_idx]
+                #flow = self.flow_simulated[i][y_idx][x_idx]
+                if o==0:
+                    flow = self.flow_simulated[i][y_idx][x_idx]
+                else:
+                    area = self.flow_simulated[i,force_in(self.y,y_idx-o):force_in(self.y,y_idx+o),force_in(self.x,x_idx-o):force_in(self.x,x_idx+o)]
+                    flow=np.max(area)
+
                 local = nc_to_localtime(self.time_d[i])
                 time_str=local.strftime("%Y%m%dT%H%M%S")
                 line = "%s,%f,%f,%f" %(time_str,y,x,flow)
@@ -120,8 +153,12 @@ class WFlow():
             x_idx=np.searchsorted(x,x1)
             #if b_print:
             #    print("y_idx=%i,x_idx=%i" %(y_idx,x_idx))
-            area = self.flow_simulated[:,force_in(y,y_idx-o):force_in(y,y_idx+o),force_in(x,x_idx-o):force_in(x,x_idx+o)]
-            area_max=np.max(area)
+            if o==0:
+                area = self.flow_simulated[:][y_idx][x_idx]
+                area_max=np.max(area)
+            else:
+                area = self.flow_simulated[:,force_in(y,y_idx-o):force_in(y,y_idx+o),force_in(x,x_idx-o):force_in(x,x_idx+o)]
+                area_max=np.max(area)
             if b_print:
                 print("x=%f,y=%f, offset=%i, max=%f" %(x1,y1,o,area_max))
             return area_max
