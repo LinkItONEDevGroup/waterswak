@@ -308,10 +308,10 @@ get_flow flow_id time_xy t x y o
 get_flow flow_id his_xy x y o
 get_flow flow_id max_offset x y o
 
-ex: get_flow 202107251400 desc
-    get_flow 202107251400 time_xy 27114180 120.9339 24.4961 10
-    get_flow 202107251400 his_xy 120.9339 24.4961 10
-    get_flow 202107251400 max_offset 120.9339 24.4961 10
+ex: get_flow C1300QE-202107251400 desc
+    get_flow C1300QE-202107251400 time_xy 27114180 120.9339 24.4961 10
+    get_flow C1300QE-202107251400 his_xy 120.9339 24.4961 10
+    get_flow C1300QE-202107251400 max_offset 120.9339 24.4961 10
         """
         self.get_flow_ret = ""
         pars=line.split()
