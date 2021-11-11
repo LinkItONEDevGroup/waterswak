@@ -284,3 +284,31 @@ def sqldf(df,sql,filename=''):
     except:
         print("EXCEPTION: sql=%s" %(sql))
 
+def sourcingwater_ask(**kwargs):
+    #kind=流域&transfer=所有河道&nodeID=1300&nodeName=頭前溪&sto=8
+    keypars=""
+    for key in kwargs:
+        keypar = "&%s=%s" %(key,kwargs[key])
+        keypars = "%s%s" %(keypars,keypar)
+    return keypars
+
+def sourcingwater_asks(asks):
+    fmt = "geojson"
+    seq = 0
+    for ask in asks:
+        title = ask['title']
+        del ask['title']
+        keypars=sourcingwater_ask(**ask)
+
+        api_id="findNodeByTransfer"
+        url="https://sourcingwater.lass-net.org/logicTopo/findNodeByTransfer?format=%s%s" %(fmt,keypars)
+        filename="output/sourcingwater_%s_%i.%s" %(title,seq,fmt)
+        seq +=1
+
+        print("url=%s" %(url))
+        r = requests.get(url, params = {})
+        open(filename, 'wb').write(r.content)
+        print("%s saved" %(filename))
+        data = load_json(filename)
+        if fmt=="json":
+            print(data)

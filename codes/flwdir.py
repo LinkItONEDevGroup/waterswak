@@ -116,7 +116,11 @@ class FlwDir():
 
     def streams(self, min_sto, filename=None): # None: return json, '' use default filename
         #河道
-        feats = self.flw.streams(min_sto=min_sto)
+        try:
+            feats = self.flw.streams(min_sto=min_sto)
+        except:
+            print("streams generation error!please setup sto correctly")
+            return None
         self.gdf = gpd.GeoDataFrame.from_features(feats, crs=self.crs)
 
         if filename=='':
@@ -132,7 +136,11 @@ class FlwDir():
 
     def subbasins_streamorder(self,min_sto, filename=None):# None: return json, '' use default filename
         # calculate subbasins with a minimum stream order 7
-        subbas = self.flw.subbasins_streamorder(min_sto=min_sto, mask=None)
+        try:
+            subbas = self.flw.subbasins_streamorder(min_sto=min_sto, mask=None)
+        except:
+            print("subbasin generation error!please setup sto correctly")
+            return None
         self.gdf_subbas = self.vectorize(subbas.astype(np.int32), 0, self.flw.transform,self.crs)
 
         if filename=='':
@@ -140,9 +148,12 @@ class FlwDir():
         if filename is None:
             return self.gdf_subbas.to_json()
         else:
-            self.gdf_subbas.to_file(filename, driver='GeoJSON')
-            print("subbas saved filename=%s" %(filename))
-
+            try:
+                self.gdf_subbas.to_file(filename, driver='GeoJSON')
+                print("subbas saved filename=%s" %(filename))
+            except:
+                print("subbasin generation error!please setup sto correctly")
+                return None
     def path(self,points,filename=None): # None: return json, '' use default filename
         # 算通過點的下游路線
         # flow paths return the list of linear indices

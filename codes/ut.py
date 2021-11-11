@@ -31,10 +31,3 @@ class UTGeneral(unittest.TestCase):
         self.assertEqual(True,True)        
 
 
-    def test_003_status(self):
-        ret = gc.CLI.do_status("connect")
-        if ret != "":
-            print(ret)
-            self.assertEqual(False,True)
-        else:
-            self.assertEqual(True,True)

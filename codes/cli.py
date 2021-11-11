@@ -50,6 +50,7 @@ class Cli(cmd.Cmd):
         self.cli_basin = CliBasin(stdout)
         self.cli_river = CliRiver(stdout)
         self.cli_cx = CliCx(stdout)
+        self.cli_sw = CliSourcingWater(stdout)
 
         self.prompt = 'WsCLI>'
 
@@ -126,6 +127,10 @@ ex: display 1
         self.cli_cx.prompt = self.prompt[:-1]+':catchment>'
         self.cli_cx.cmdloop()
 
+    def do_sourcingwater(self,line):
+        """sourcingwater sub command directory"""
+        self.cli_sw.prompt = self.prompt[:-1]+':sourcingwater>'
+        self.cli_sw.cmdloop()
 ############ eng sub cmd ####################
 class CliEng(cmd.Cmd):
     def __init__(self,stdout):
@@ -597,6 +602,7 @@ cx_dict={'basin_id':1300, 'basin_name':'頭前溪', 'geo':'data/basin-河川流�
         self.df = None
         self.fd = None
         self.sto=9
+        self.sto_range=[4,12] #default, will be override
     def set_basin(self,basin_id):
         self.basin_id = basin_id
 
@@ -621,18 +627,22 @@ cx_dict={'basin_id':1300, 'basin_name':'頭前溪', 'geo':'data/basin-河川流�
         print("loading basin take few seconds, please wait!")
         df = geopandas.read_file(filename,encoding='utf-8')
         self.df = df[df['basin_no']==self.basin_id]
-        filebasename="basin_c%s" %(self.basin_id)
-        path_dir="output/%s" %(filebasename)
-        if not os.path.exists(path_dir):
-            os.mkdir(path_dir)
-        dict_par={'encoding':'utf-8'}
-        self.df.to_file("%s/%s.shp" %(path_dir,filebasename),**dict_par)
-        print("%s shp saved: %s" %(filebasename, path_dir))
+        if len(self.df.index)>0:
+            filebasename="basin_c%s" %(self.basin_id)
+            path_dir="output/%s" %(filebasename)
+            if not os.path.exists(path_dir):
+                os.mkdir(path_dir)
+            dict_par={'encoding':'utf-8'}
+            self.df.to_file("%s/%s.shp" %(path_dir,filebasename),**dict_par)
+            print("%s shp saved: %s" %(filebasename, path_dir))
 
         #load flwdir
         dtm_file= cx_dict['dtm']
         flwdir_file=cx_dict['ldd']
         self.sto= cx_dict['min_sto']
+        sto_range_str = cx_dict['sto_range']
+        pars = sto_range_str.split(",")
+        self.sto_range=[int(pars[0]),int(pars[1])]
         fd = FlwDir()
         fd.reload(dtm_file,flwdir_file)
         fd.init()
@@ -733,11 +743,12 @@ ex: output stream
         if len(pars)>=1:
             id = pars[0]
         if id=="stream":
-            for i in range(4,12):
+
+            for i in range(self.sto_range[0],self.sto_range[1]):
                 filename = 'output/river_c%s_stream_%i.geojson' %(self.basin_id,i)
                 self.fd.streams(i,filename)
         if id=="subbas":
-            for i in range(4,12):
+            for i in range(self.sto_range[0],self.sto_range[1]):
                 filename = 'output/river_c%s_subbas_%i.geojson' %(self.basin_id,i)
                 self.fd.subbasins_streamorder(i,filename)
         if id =="point_catchment_csv":
@@ -924,6 +935,31 @@ ex: info point_height 274202,2731387
         #direction
         pass
 
+    def do_quit(self, line):
+        """quit this sub command"""
+        """quit"""
+        return True
+
+############ sourcingwater sub cmd ####################
+class CliSourcingWater(cmd.Cmd):
+    def __init__(self,stdout):
+        if stdout:
+            cmd.Cmd.__init__(self,stdout=stdout)
+        else:
+            cmd.Cmd.__init__(self)
+    def do_asks(self,line):
+        """ask sourcingwater questions from json setting
+asks [pathname]
+ex: asks output/asks.json
+"""
+
+        pars=line.split()
+        filename = "output/asks.json"
+        if len(pars)>=1:
+            filename = pars[0]
+        asks_json = load_json(filename)
+        print("----- asks by json -----\n%s\n----------" %(asks_json))
+        sourcingwater_asks(asks_json)
     def do_quit(self, line):
         """quit this sub command"""
         """quit"""

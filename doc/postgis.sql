@@ -220,10 +220,12 @@ raster2pgsql -s 3826 -I -C -t 20x200 data/C1300_DTM_20M.tif public.c1300_dtm_20m
 
 psql -h localhost -p 5431 -U postgres postgis -f data/c1300_dtm_20m.sql
 
+--
+raster2pgsql -s 4326 -I -C /Users/wuulong/MakerBk2/QGIS/projects/hackathon/流量/C1300QE-202107251400.nc public.C1300QE-202107251400 > output/C1300QE-202107251400.sql
+
 -- 查測站高程
 SELECT rid,ST_Value(rast, 'SRID=3826;POINT(268454 2733084)'::geometry) as height
-FROM c1300_dtm_20m
-  WHERE ST_Intersects(rast, 'SRID=3826;POINT(268454 2733084)'::geometry);
+FROM c1300_dtm_20m WHERE ST_Intersects(rast, 'SRID=3826;POINT(268454 2733084)'::geometry);
   
 -- 查縣市鄉鎮村里
 select countyid,countycode,countyname from county_moi;
@@ -1203,3 +1205,5 @@ CAST ("LET_EAST" AS DOUBLE PRECISION),CAST ("LET_NORTH" AS DOUBLE PRECISION)
 
 --
 select name,ST_AsEWKT(ST_Transform(geom, 4326)) as wkt_4326 from sensor_station where type='河川流量測站';
+
+隆恩堰|https://www.wranb.gov.tw/3452/3475/26113/%E9%9A%86%E6%81%A9%E5%A0%B0/|隆恩堰wiki|https://zh.wikipedia.org/wiki/%E9%9A%86%E6%81%A9%E5%A0%B0
