@@ -15,6 +15,7 @@ gd={}
 conn=connect_db()
 
 case_id="riverlog_rain_hourdiff_station_cnt"
+#case_id="pm25"
 period=60 # second
 while True:
     t_value = time.time()

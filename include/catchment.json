@@ -6,6 +6,7 @@
     "dtm": "data/catchment/C1300_20m_elv0.tif",
     "ldd": "data/catchment/C1300_20m_ldd.tif",
     "min_sto": 9,
+    "sto_range": "4,12",
     "load_type": 0
   },
   {
