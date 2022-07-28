@@ -724,14 +724,14 @@ output [type] [...]
         subbas : sto from 4-11,
         point_catchment_csv csv_filename : -need csv filename input or x,y for single point
         point_catchment x,y : - x,y for single point
-        path x,y [x,y] [...] : generate downstream path
+        path x,y,name [x,y,name] [...] : generate downstream path
         pathline_interpolate [parts] [filename_csv] [filename_shp] : generate interpolate points from path, also output slope shape
         nx_write_shp : output network to shp
 ex: output stream
     output subbas
     output point_catchment_csv "data/喝好水 吃好物 有良居-公民協力 - 點位集水區.csv"
     output point_catchment 253520,2743364
-    output path 253520,2743364
+    output path 253520,2743364,name_a
     output nx_write_shp
     output pathline_interpolate 10
         """
@@ -792,7 +792,7 @@ ex: output stream
             for i in range(1,len(pars)):
                 xy_str=pars[i]
                 xy = xy_str.split(",")
-                points.append([float(xy[0]),float(xy[1])])
+                points.append([float(xy[0]),float(xy[1]),str(xy[2])])
             if len(points)>0:
                 self.fd.path(points,'')
             else:
