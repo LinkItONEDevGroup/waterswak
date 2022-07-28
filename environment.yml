@@ -13,7 +13,7 @@ dependencies:
   - configobj
   - matplotlib
   - networkx
-  - pyflwdir
+  - pyflwdir=0.4.7
   - rasterio
   - cartopy
   - descartes
